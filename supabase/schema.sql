@@ -52,6 +52,15 @@ alter table csr_members enable row level security;
 alter table roster enable row level security;
 alter table operator_auth enable row level security;
 
+-- How many bookings each CSR rejected on each service date. One row per CSR per date, counted up on each rejection.
+create table if not exists csr_rejection_counts (
+  csr_code       text not null references csr_members(csr_code),
+  service_date   date not null,
+  rejected_count int  not null default 0,
+  primary key (csr_code, service_date)
+);
+alter table csr_rejection_counts enable row level security;
+
 -- Each movement is keyed by its S.No and date, e.g. 1_2026-11-23. Tables created before this column existed
 -- are upgraded here. Safe to run again.
 alter table roster add column if not exists roster_key text;
@@ -237,6 +246,11 @@ begin
 
   v_rejected := b.rejected_by || p_csr;
 
+  insert into csr_rejection_counts (csr_code, service_date, rejected_count)
+  values (p_csr, b.service_date, 1)
+  on conflict (csr_code, service_date)
+    do update set rejected_count = csr_rejection_counts.rejected_count + 1;
+
   select m.csr_code into v_new
   from csr_members m
   where m.availability = 'Available'
@@ -309,6 +323,21 @@ begin
 end;
 $$;
 
+-- Operator view: rejections per CSR for a date (CSRs with none are shown as 0).
+create or replace function list_rejection_counts(p_pass text, p_date date)
+returns table (csr_code text, name text, rejected_count int)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
+  return query
+    select m.csr_code, m.name, coalesce(c.rejected_count, 0)
+    from csr_members m
+    left join csr_rejection_counts c on c.csr_code = m.csr_code and c.service_date = p_date
+    order by coalesce(c.rejected_count, 0) desc, m.name;
+end;
+$$;
+
+grant execute on function list_rejection_counts(text, date) to anon, authenticated;
 grant execute on function list_roster(text, date) to anon, authenticated;
 grant execute on function list_unassigned(text, date) to anon, authenticated;
 grant execute on function assign_booking(text, bigint, text) to anon, authenticated;
