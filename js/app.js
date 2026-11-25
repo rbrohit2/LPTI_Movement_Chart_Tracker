@@ -4,8 +4,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 
 const $=s=>document.querySelector(s);
 const state={rows:[],fileName:"",serviceDate:"",rawText:""};
-const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks","notes"];
-const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Report At?",remarks:"Reviewed?",notes:"Remarks"};
+const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks"];
+const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Report At?",remarks:"Reviewed?"};
 
 $("#chooseBtn").onclick=()=>$("#pdfInput").click();
 $("#dropZone").onclick=e=>{if(e.target.id!=="chooseBtn")$("#pdfInput").click()};
@@ -21,7 +21,7 @@ $("#resetBtn").onclick=resetAll;
 
 function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"")}
 function progress(p,text){$("#progressWrap").classList.remove("hidden");$("#progressBar").style.width=p+"%";$("#progressText").textContent=text}
-function blankRow(no=1){return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:"",fh:"",fileCode:"",pax:"",movementType:"",mode:"FLIGHT",serviceNumber:"",scheduledTime:"",pickup:"",dropoff:"",reportingTime:"",vehicle:"",transporter:"",reportAt:"",assistanceRequired:"REVIEW",remarks:"",notes:"",needsReview:true,userEdited:false}}
+function blankRow(no=1){return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:"",fh:"",fileCode:"",pax:"",movementType:"",mode:"FLIGHT",serviceNumber:"",scheduledTime:"",pickup:"",dropoff:"",reportingTime:"",vehicle:"",transporter:"",reportAt:"",assistanceRequired:"REVIEW",remarks:"",needsReview:true,userEdited:false}}
 
 async function loadPdf(file){
   if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){notify("Please select a PDF file.",true);return}
@@ -57,7 +57,13 @@ function detectDate(text){
   const d=new Date(Date.UTC(+m[3],months[m[2].toUpperCase()],+m[1]));return d.toISOString().slice(0,10)
 }
 
+function renderHeader(){
+  const tr=$("#movementTable thead tr");tr.innerHTML="";
+  fields.forEach(f=>{const th=document.createElement("th");th.textContent=headers[f];tr.appendChild(th)});
+  tr.appendChild(document.createElement("th"));
+}
 function render(){
+  renderHeader();
   const tbody=$("#movementTable tbody");tbody.innerHTML="";
   state.rows.forEach((r,idx)=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
     if(f==="movementType"){el=select(["","ARRIVAL","DEPARTURE","TRANSFER","OTHER"],r[f])}
