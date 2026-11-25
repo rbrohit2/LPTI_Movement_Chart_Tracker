@@ -65,6 +65,29 @@
         <textarea id="rawText" readonly></textarea>
       </details>
     </section>
+
+    <section id="csrSection" class="card csr-card">
+      <h2>CSR details <span id="csrCount" class="pill">0</span></h2>
+      <p>Company Airport Service Representatives. Add, edit or remove them here. Saved in this browser.</p>
+      <form id="csrForm" class="csr-form">
+        <label>Name<input id="csrName" autocomplete="off" required></label>
+        <label>Language<select id="csrLanguage" required></select></label>
+        <label>Airport pass<select id="csrPass" required></select></label>
+        <label>Mobile<input id="csrMobile" inputmode="numeric" autocomplete="off" required></label>
+        <label>CSR code<input id="csrCode" maxlength="4" autocomplete="off" required></label>
+        <div class="csr-actions">
+          <button id="csrSubmit" class="btn primary" type="submit">Add CSR</button>
+          <button id="csrCancel" class="btn hidden" type="button">Cancel</button>
+        </div>
+      </form>
+      <div id="csrMessage" class="message hidden" role="status"></div>
+      <div class="table-wrap">
+        <table id="csrTable">
+          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <footer>Movement data remains in this browser unless exported.</footer>
