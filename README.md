@@ -1,4 +1,4 @@
-# LPTI Movement Chart Tracker — MVP v0.2
+# LPTI Movement Chart Tracker — MVP v0.3
 
 Browser-only GitHub Pages app for uploading a daily movement-chart PDF and reviewing the extracted movements in an editable table.
 
@@ -34,3 +34,6 @@ Then open `http://localhost:8000`.
 
 ## Privacy
 The PDF is processed locally in the browser. The app has no backend. Saved data stays in browser storage unless exported.
+
+## v0.3 parser fix
+Normalizes PDF.js coordinates using the page viewport so the parser correctly handles the source PDF's 90-degree page rotation. Row bands and printed columns are then interpreted separately.
