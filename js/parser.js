@@ -31,7 +31,10 @@ const COLUMNS = [
 // last line and the next block's first line.
 const BAND_OFFSET = 8;
 
-const AIRPORT_STOPWORDS = new Set(["PAX", "AND", "THE", "FOR", "MODE", "TIME", "FROM", "AC", "SL", "FIT", "GRP", "NOT"]);
+// Printed locations that appear on a transporter line. Kept as "Transporter (Location)".
+const TRANSPORTER_LOCATIONS = ["Shanti Niketan"];
+
+const AIRPORT_STOPWORDS =new Set(["PAX", "AND", "THE", "FOR", "MODE", "TIME", "FROM", "AC", "SL", "FIT", "GRP", "NOT"]);
 
 function columnRanges(width) {
   const k = width / TEMPLATE_WIDTH;
@@ -133,7 +136,12 @@ function interpretBlock(serial, items, cols, serviceDate) {
 
   const transporterRaw = joinItems(cell.transporter);
   const reportCity = /\bDelhi\b/.test(transporterRaw) ? "Delhi" : "";
-  const transporter = transporterRaw.replace(/\bDelhi\b/g, "").replace(/\s+/g, " ").trim();
+  // Transporter (Location): a printed location on the transporter line is kept in brackets.
+  const transporterLocation = TRANSPORTER_LOCATIONS.find((l) => transporterRaw.includes(l)) || "";
+  let transporter = transporterRaw.replace(/\bDelhi\b/g, "");
+  if (transporterLocation) transporter = transporter.replace(transporterLocation, "");
+  transporter = transporter.replace(/\s+/g, " ").trim();
+  if (transporterLocation) transporter = `${transporter} (${transporterLocation})`;
   let remarks = joinItems(cell.remarks);
   if (reportCity) remarks = remarks ? `${remarks} | Report at ${reportCity}` : `Report at ${reportCity}`;
 
