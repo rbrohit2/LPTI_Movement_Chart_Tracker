@@ -1,6 +1,6 @@
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.mjs";
 import { parseMovementPages } from "./parser.js";
-import { initCsrSection } from "./csr.js";
+import { initCsrSection, initMarketSection } from "./csr.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
 const $=s=>document.querySelector(s);
@@ -83,4 +83,5 @@ function exportCsv(){const q=v=>'"'+String(v??"").replaceAll('"','""')+'"';const
 function resetAll(){if(!confirm("Clear the current imported chart and unsaved edits?"))return;state.rows=[];state.rawText="";$("#workspace").classList.add("hidden");$("#message").classList.add("hidden");$("#pdfInput").value=""}
 
 initCsrSection(document,localStorage);
+initMarketSection(document,localStorage);
 const saved=localStorage.getItem("lptiMovementMvp");if(saved){try{const x=JSON.parse(saved);Object.assign(state,x);if(state.rows?.length){$("#workspace").classList.remove("hidden");$("#rawText").value=state.rawText||"";notify(`Restored ${state.rows.length} locally saved movement row(s).`);render()}}catch{}}
