@@ -166,6 +166,7 @@ function render(){
 function responseClass(status){
   return {Accepted:"is-accepted",Allocated:"is-allocated",Reallocated:"is-reallocated",Unassigned:"is-unassigned"}[status]||"is-none";
 }
+function knownCsrCodes(){return new Set(loadCsrs(localStorage).map(c=>c.csrCode))}
 function renderBody(){
   const tbody=$("#movementTable tbody");tbody.innerHTML="";
   visibleRows().forEach(({r,idx})=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
@@ -175,7 +176,15 @@ function renderBody(){
     else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response "+responseClass(r[f]);el.textContent=r[f]||"Not published"}
     else if(f==="remarks"){el=document.createElement("textarea");el.value=r[f]??""}
     else{el=document.createElement("input");el.value=r[f]??"";if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
-    el.title=headers[f];el.onchange=()=>{r[f]=el.value;r.userEdited=true;if(f==="csr")r.csrManual=true;r.needsReview=validate(r).length>0;render()};td.appendChild(el);tr.appendChild(td)});
+    if(f==="csr"&&r.csrManual&&r.csr&&!knownCsrCodes().has(String(r.csr).trim().toUpperCase()))el.classList.add("bad-csr");
+    el.title=headers[f];el.onchange=()=>{
+      if(f==="csr"){
+        r.csrManual=true;
+        r[f]=String(el.value||"").trim().toUpperCase();
+        if(r[f]&&!knownCsrCodes().has(r[f]))toast(`"${r[f]}" is not a CSR code. Check the CSR table for the right code.`,true);
+      }else r[f]=el.value;
+      r.userEdited=true;r.needsReview=validate(r).length>0;render();
+    };td.appendChild(el);tr.appendChild(td)});
     const action=document.createElement("td"),del=document.createElement("button");del.className="icon-btn";del.title="Delete row";del.textContent="×";del.onclick=()=>{state.rows.splice(idx,1);render()};action.appendChild(del);tr.appendChild(action);tbody.appendChild(tr)});updateSummary()
 }
 function select(options,value){const s=document.createElement("select");options.forEach(o=>{const x=document.createElement("option");x.value=o;x.textContent=o||"Select";x.selected=o===value;s.appendChild(x)});return s}
