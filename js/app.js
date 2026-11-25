@@ -9,8 +9,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 
 const $=s=>document.querySelector(s);
 const state={rows:[],fileName:"",serviceDate:"",rawText:""};
-const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks","csr"];
-const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Reviewed?",remarks:"Remarks",csr:"CSR"};
+const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks","csr","csrResponse"];
+const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Reviewed?",remarks:"Remarks",csr:"CSR",csrResponse:"CSR Response"};
 
 $("#chooseBtn").onclick=()=>$("#pdfInput").click();
 $("#dropZone").onclick=e=>{if(e.target.id!=="chooseBtn")$("#pdfInput").click()};
@@ -25,7 +25,7 @@ $("#allocateBtn").onclick=()=>{
   const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
   const out=allocateAll(state.rows,csrs,markets);
   for(const a of out){const r=state.rows.find(x=>x.movementNo===a.movementNo);if(!r)continue;
-    const c=csrs.find(x=>x.id===a.csrId);r.csr=c?`${c.csrCode} · ${a.status}`:a.status;r.csrReason=a.reason;r.userEdited=false}
+    const c=csrs.find(x=>x.id===a.csrId);r.csr=c?(a.status==="Next best"?`${c.csrCode} (next best)`:c.csrCode):a.status;r.csrReason=a.reason;r.userEdited=false}
   const n=out.filter(a=>a.csrId).length;
   notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.`,n<out.length);render();
 };
@@ -48,9 +48,28 @@ async function publishRoster(){
     const count=await rpc("publish_roster",{p_pass:passcode,p_date:state.serviceDate,p_csrs:payload.csrs,p_rows:payload.rows});
     const pinText=csrs.map(c=>`${c.name} ${pins[c.csrCode]}`).join(" · ");
     notify(`Published ${count} booking(s) for ${state.serviceDate}. Share publish.html with CSRs. PINs: ${pinText}`);
-    render();
+    await refreshResponses(passcode);
   }catch(e){notify(`Publish failed: ${e.message}`,true)}
 }
+// Fills the CSR Response column with each booking's status from Supabase (Allocated, Accepted, Rejected, Unassigned),
+// and shows the CSR it is currently with.
+async function refreshResponses(passcode){
+  try{
+    const rows=await rpc("list_roster",{p_pass:passcode,p_date:state.serviceDate});
+    const byNo=new Map(rows.map(x=>[Number(x.movement_no),x]));
+    for(const r of state.rows){
+      const d=byNo.get(Number(r.movementNo));
+      r.csrResponse=d?d.status:"Not published";
+      if(d)r.csr=d.csr_code||"";
+    }
+    render();
+  }catch(e){notify(`Could not load CSR responses: ${e.message}`,true)}
+}
+$("#refreshResponsesBtn").onclick=async()=>{
+  if(!state.rows.length){notify("Import a chart first.",true);return}
+  const p=prompt("Operator passcode:");
+  if(p)await refreshResponses(p);
+};
 $("#saveBtn").onclick=saveLocal;
 $("#exportBtn").onclick=exportCsv;
 $("#resetBtn").onclick=resetAll;
@@ -93,18 +112,59 @@ function detectDate(text){
   const d=new Date(Date.UTC(+m[3],months[m[2].toUpperCase()],+m[1]));return d.toISOString().slice(0,10)
 }
 
+// Sort and filter state for the movement table. Only the view changes; state.rows keeps its order.
+let sortState={field:null,dir:1};
+const filters={};
+const NUMERIC_FIELDS=["movementNo","pax"];
+
+function compareCells(x,y,numeric,dir){
+  const xb=x==null||x==="",yb=y==null||y==="";
+  if(xb&&yb)return 0;
+  if(xb)return 1; // blanks go last, whatever the direction
+  if(yb)return -1;
+  const a=numeric?Number(x):String(x).toLowerCase(),b=numeric?Number(y):String(y).toLowerCase();
+  return (a>b?1:a<b?-1:0)*dir;
+}
+function visibleRows(){
+  let items=state.rows.map((r,idx)=>({r,idx}));
+  for(const f of fields){
+    const q=(filters[f]||"").trim().toLowerCase();
+    if(q)items=items.filter(({r})=>String(r[f]??"").toLowerCase().includes(q));
+  }
+  if(sortState.field){
+    const f=sortState.field;
+    items=items.slice().sort((a,b)=>compareCells(a.r[f],b.r[f],NUMERIC_FIELDS.includes(f),sortState.dir)||a.idx-b.idx);
+  }
+  return items;
+}
 function renderHeader(){
-  const tr=$("#movementTable thead tr");tr.innerHTML="";
-  fields.forEach(f=>{const th=document.createElement("th");th.textContent=headers[f];tr.appendChild(th)});
-  tr.appendChild(document.createElement("th"));
+  const thead=$("#movementTable thead");thead.innerHTML="";
+  const tr=document.createElement("tr"),ftr=document.createElement("tr");ftr.className="filter-row";
+  fields.forEach(f=>{
+    const th=document.createElement("th");th.className="sortable";
+    const arrow=sortState.field===f?(sortState.dir===1?" ▲":" ▼"):"";
+    th.textContent=headers[f]+arrow;th.title="Click to sort";
+    th.onclick=()=>{if(sortState.field===f)sortState.dir*=-1;else{sortState.field=f;sortState.dir=1}render()};
+    tr.appendChild(th);
+    const fth=document.createElement("th"),inp=document.createElement("input");
+    inp.placeholder="Filter";inp.value=filters[f]||"";inp.setAttribute("aria-label",`Filter ${headers[f]}`);
+    inp.oninput=()=>{filters[f]=inp.value;renderBody()};
+    fth.appendChild(inp);ftr.appendChild(fth);
+  });
+  tr.appendChild(document.createElement("th"));ftr.appendChild(document.createElement("th"));
+  thead.append(tr,ftr);
 }
 function render(){
   renderHeader();
+  renderBody();
+}
+function renderBody(){
   const tbody=$("#movementTable tbody");tbody.innerHTML="";
-  state.rows.forEach((r,idx)=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
+  visibleRows().forEach(({r,idx})=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
     if(f==="movementType"){el=select(["","ARRIVAL","DEPARTURE","TRANSFER","OTHER"],r[f])}
     else if(f==="mode"){el=select(["FLIGHT","TRAIN","ROAD","OTHER"],r[f])}
     else if(f==="assistanceRequired"){el=select(["REVIEW","YES","NO"],r[f])}
+    else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response";el.textContent=r[f]||"Not published"}
     else if(f==="remarks"){el=document.createElement("textarea");el.value=r[f]??""}
     else{el=document.createElement("input");el.value=r[f]??"";if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
     el.title=headers[f];el.onchange=()=>{r[f]=el.value;r.userEdited=true;r.needsReview=validate(r).length>0;render()};td.appendChild(el);tr.appendChild(td)});
