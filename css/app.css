@@ -8,6 +8,6 @@
 .csr-response:empty::before{content:"Not published"}
 .csr-response.is-accepted{background:#d8f2e0;color:#17572f}
 .csr-response.is-allocated{background:#fff1c2;color:#6b4a00}
-.csr-response.is-rejected{background:#ffe0c2;color:#7a3a00}
+.csr-response.is-reallocated{background:#ffe0c2;color:#7a3a00}
 .csr-response.is-unassigned{background:#ffd6d6;color:#8f1d1d}
 .csr-response.is-none{background:#e6eaee;color:#4a5a68}

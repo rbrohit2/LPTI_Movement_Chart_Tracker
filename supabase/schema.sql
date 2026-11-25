@@ -35,7 +35,7 @@ create table if not exists roster (
   language_code  text not null default '',
   airport        boolean not null default false,
   csr_code       text references csr_members(csr_code),
-  status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Rejected', 'Unassigned')),
+  status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Reallocated', 'Unassigned')),
   rejected_by    text[] not null default '{}',
   roster_key     text,
   fh             text not null default '',
@@ -59,9 +59,11 @@ update roster set roster_key = to_char(service_date, 'YYYY-MM-DD') || '_' || mov
 create unique index if not exists roster_roster_key_uq on roster (roster_key);
 alter table roster add column if not exists fh text not null default '';
 
--- Status list gained 'Rejected' (a booking passed on after a CSR rejected it). Replaces the old check. Safe to run again.
+-- 'Rejected' is now 'Reallocated': a booking passed on after a CSR rejected it. Existing rows are renamed first,
+-- then the status rule is replaced. Safe to run again.
 alter table roster drop constraint if exists roster_status_check;
-alter table roster add constraint roster_status_check check (status in ('Allocated', 'Accepted', 'Rejected', 'Unassigned'));
+update roster set status = 'Reallocated' where status = 'Rejected';
+alter table roster add constraint roster_status_check check (status in ('Allocated', 'Accepted', 'Reallocated', 'Unassigned'));
 
 -- ---------- helpers ----------
 
@@ -260,8 +262,8 @@ begin
     return 'Unassigned';
   end if;
 
-  -- 'Rejected' means it was passed on after a rejection and the new CSR has not yet responded.
-  update roster set csr_code = v_new, status = 'Rejected', rejected_by = v_rejected where id = p_id;
+  -- 'Reallocated' means it was passed on after a rejection and the new CSR has not yet responded.
+  update roster set csr_code = v_new, status = 'Reallocated', rejected_by = v_rejected where id = p_id;
   return 'Reassigned';
 end;
 $$;
