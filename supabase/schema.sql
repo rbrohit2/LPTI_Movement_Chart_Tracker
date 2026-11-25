@@ -37,6 +37,7 @@ create table if not exists roster (
   csr_code       text references csr_members(csr_code),
   status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Unassigned')),
   rejected_by    text[] not null default '{}',
+  roster_key     text,
   unique (service_date, movement_no)
 );
 
@@ -49,6 +50,12 @@ create table if not exists operator_auth (
 alter table csr_members enable row level security;
 alter table roster enable row level security;
 alter table operator_auth enable row level security;
+
+-- Each movement is keyed by its S.No and date, e.g. 1_2026-11-23. Tables created before this column existed
+-- are upgraded here. Safe to run again.
+alter table roster add column if not exists roster_key text;
+update roster set roster_key = to_char(service_date, 'YYYY-MM-DD') || '_' || movement_no where roster_key is null;
+create unique index if not exists roster_roster_key_uq on roster (roster_key);
 
 -- ---------- helpers ----------
 
@@ -102,10 +109,12 @@ $$;
 -- Publish one day's roster. p_csrs: [{csr_code,name,language_code,airport_pass,availability,pin}]
 -- p_rows: [{movement_no,guest_group,file_code,pax,movement_type,mode,flight,scheduled_time,pickup,dropoff,
 --           reporting_time,vehicle,report_at,language_code,airport,csr_code,status}]
--- Replaces any roster already published for that date.
+-- Brings the day's roster in line with the chart, movement by movement (key = S.No and date).
+-- Unchanged bookings keep their CSR, accept/reject responses and rejections; changed bookings are reset to
+-- the new allocation; movements no longer on the chart are removed.
 create or replace function publish_roster(p_pass text, p_date date, p_csrs jsonb, p_rows jsonb)
 returns int language plpgsql security definer set search_path = public as $$
-declare c jsonb; r jsonb; n int := 0; s text;
+declare c jsonb; r jsonb; n int := 0; s text; v_key text;
 begin
   if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
 
@@ -123,19 +132,55 @@ begin
           pin_hash = excluded.pin_hash;
   end loop;
 
-  delete from roster where service_date = p_date;
+  delete from roster
+  where service_date = p_date
+    and not exists (
+      select 1 from jsonb_array_elements(p_rows) x
+      where (x->>'movement_no')::int = roster.movement_no
+    );
 
   for r in select * from jsonb_array_elements(p_rows) loop
-    insert into roster (service_date, movement_no, guest_group, file_code, pax, movement_type, mode, flight,
+    v_key := p_date::text || '_' || ((r->>'movement_no')::int)::text;
+    insert into roster (roster_key, service_date, movement_no, guest_group, file_code, pax, movement_type, mode, flight,
                         scheduled_time, pickup, dropoff, reporting_time, vehicle, report_at, language_code,
                         airport, csr_code, status)
-    values (p_date, (r->>'movement_no')::int, coalesce(r->>'guest_group', ''), coalesce(r->>'file_code', ''),
+    values (v_key, p_date, (r->>'movement_no')::int, coalesce(r->>'guest_group', ''), coalesce(r->>'file_code', ''),
             coalesce(r->>'pax', ''), coalesce(r->>'movement_type', ''), coalesce(r->>'mode', ''),
             coalesce(r->>'flight', ''), coalesce(r->>'scheduled_time', ''), coalesce(r->>'pickup', ''),
             coalesce(r->>'dropoff', ''), coalesce(r->>'reporting_time', ''), coalesce(r->>'vehicle', ''),
             coalesce(r->>'report_at', ''), coalesce(r->>'language_code', ''),
             coalesce((r->>'airport')::boolean, false), nullif(r->>'csr_code', ''),
-            coalesce(r->>'status', 'Allocated'));
+            coalesce(r->>'status', 'Allocated'))
+    on conflict (roster_key) do update set
+      guest_group    = excluded.guest_group,
+      file_code      = excluded.file_code,
+      pax            = excluded.pax,
+      movement_type  = excluded.movement_type,
+      mode           = excluded.mode,
+      flight         = excluded.flight,
+      scheduled_time = excluded.scheduled_time,
+      pickup         = excluded.pickup,
+      dropoff        = excluded.dropoff,
+      reporting_time = excluded.reporting_time,
+      vehicle        = excluded.vehicle,
+      report_at      = excluded.report_at,
+      language_code  = excluded.language_code,
+      airport        = excluded.airport,
+      csr_code = case when roster.scheduled_time = excluded.scheduled_time
+                       and roster.file_code = excluded.file_code and roster.flight = excluded.flight
+                       and roster.movement_type = excluded.movement_type
+                       and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
+                 then roster.csr_code else excluded.csr_code end,
+      status = case when roster.scheduled_time = excluded.scheduled_time
+                     and roster.file_code = excluded.file_code and roster.flight = excluded.flight
+                     and roster.movement_type = excluded.movement_type
+                     and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
+                 then roster.status else excluded.status end,
+      rejected_by = case when roster.scheduled_time = excluded.scheduled_time
+                          and roster.file_code = excluded.file_code and roster.flight = excluded.flight
+                          and roster.movement_type = excluded.movement_type
+                          and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
+                    then roster.rejected_by else '{}'::text[] end;
     n := n + 1;
   end loop;
 

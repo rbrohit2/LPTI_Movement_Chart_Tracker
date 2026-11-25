@@ -35,6 +35,8 @@ async function publishRoster(){
   if(!state.rows.length){notify("Import a chart and allocate CSRs before publishing.",true);return}
   const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
   if(!csrs.length){notify("Add CSRs before publishing.",true);return}
+  if(!state.serviceDate){notify("No service date found in the chart. Re-import the PDF before publishing.",true);return}
+  saveLocal(); // the saved chart is what gets published, so republishing never needs the PDF again
   const passcode=prompt("Operator passcode:");
   if(!passcode)return;
   const assignments=allocateAll(state.rows,csrs,markets);
@@ -86,7 +88,7 @@ async function loadPdf(file){
 
 function detectDate(text){
   const m=text.match(/\b(\d{1,2})[-\s](JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[-\s](20\d{2})\b/i);
-  if(!m)return new Date().toISOString().slice(0,10);
+  if(!m)return ""; // no date in the chart: publishing is blocked, rather than guessing today's date
   const months={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
   const d=new Date(Date.UTC(+m[3],months[m[2].toUpperCase()],+m[1]));return d.toISOString().slice(0,10)
 }
