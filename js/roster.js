@@ -18,6 +18,7 @@ export function ensurePins(storage, csrs, randomDigits = () => String(Math.floor
 export function buildRoster(rows, assignments, csrs, markets, pins, serviceDate) {
   const byNo = new Map(assignments.map((a) => [a.movementNo, a]));
   const csrById = new Map(csrs.map((c) => [c.id, c]));
+  const csrByCode = new Map(csrs.map((c) => [c.csrCode, c]));
 
   const csrPayload = csrs.map((c) => ({
     csr_code: c.csrCode,
@@ -32,7 +33,11 @@ export function buildRoster(rows, assignments, csrs, markets, pins, serviceDate)
   for (const r of rows) {
     const a = byNo.get(r.movementNo);
     if (!a) continue;
-    const holder = a.csrId ? csrById.get(a.csrId) : null;
+    // A CSR typed in by hand on the chart wins over the allocation. Blank means no CSR.
+    const manual = r.csrManual === true;
+    const holder = manual
+      ? csrByCode.get(String(r.csr || "").trim().toUpperCase()) || null
+      : a.csrId ? csrById.get(a.csrId) : null;
     const airport = (r.movementType === "ARRIVAL" || r.movementType === "DEPARTURE") && (r.mode === "FLIGHT" || r.mode === "TRAIN");
     rowPayload.push({
       movement_no: r.movementNo,
@@ -54,6 +59,7 @@ export function buildRoster(rows, assignments, csrs, markets, pins, serviceDate)
       airport,
       csr_code: holder ? holder.csrCode : null,
       status: holder ? "Allocated" : "Unassigned",
+      csr_manual: manual,
     });
   }
   return { csrs: csrPayload, rows: rowPayload };

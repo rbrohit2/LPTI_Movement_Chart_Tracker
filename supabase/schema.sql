@@ -131,7 +131,7 @@ $$;
 -- the new allocation; movements no longer on the chart are removed.
 create or replace function publish_roster(p_pass text, p_date date, p_csrs jsonb, p_rows jsonb)
 returns int language plpgsql security definer set search_path = public as $$
-declare c jsonb; r jsonb; n int := 0; s text; v_key text;
+declare c jsonb; r jsonb; n int := 0; s text; v_key text; v_manual boolean;
 begin
   if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
 
@@ -158,6 +158,7 @@ begin
 
   for r in select * from jsonb_array_elements(p_rows) loop
     v_key := p_date::text || '_' || ((r->>'movement_no')::int)::text;
+    v_manual := coalesce((r->>'csr_manual')::boolean, false); -- CSR was set by hand on the chart
     insert into roster (roster_key, service_date, movement_no, guest_group, file_code, pax, movement_type, mode, flight,
                         scheduled_time, pickup, dropoff, reporting_time, vehicle, report_at, language_code,
                         airport, csr_code, status, fh)
@@ -184,17 +185,20 @@ begin
       report_at      = excluded.report_at,
       language_code  = excluded.language_code,
       airport        = excluded.airport,
-      csr_code = case when roster.scheduled_time = excluded.scheduled_time
+      csr_code = case when v_manual then excluded.csr_code
+                 when roster.scheduled_time = excluded.scheduled_time
                        and roster.file_code = excluded.file_code and roster.flight = excluded.flight
                        and roster.movement_type = excluded.movement_type
                        and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
                  then roster.csr_code else excluded.csr_code end,
-      status = case when roster.scheduled_time = excluded.scheduled_time
+      status = case when v_manual then (case when excluded.csr_code is null then 'Unassigned' when roster.csr_code is distinct from excluded.csr_code then 'Allocated' else roster.status end)
+                 when roster.scheduled_time = excluded.scheduled_time
                      and roster.file_code = excluded.file_code and roster.flight = excluded.flight
                      and roster.movement_type = excluded.movement_type
                      and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
                  then roster.status else excluded.status end,
-      rejected_by = case when roster.scheduled_time = excluded.scheduled_time
+      rejected_by = case when v_manual then roster.rejected_by
+                         when roster.scheduled_time = excluded.scheduled_time
                           and roster.file_code = excluded.file_code and roster.flight = excluded.flight
                           and roster.movement_type = excluded.movement_type
                           and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff

@@ -40,6 +40,8 @@ async function publishRoster(){
   saveLocal(); // the saved chart is what gets published, so republishing never needs the PDF again
   const passcode=prompt("Operator passcode:");
   if(!passcode)return;
+  const badCsr=state.rows.find(r=>r.csrManual&&String(r.csr||"").trim()&&!csrs.some(c=>c.csrCode===String(r.csr).trim().toUpperCase()));
+  if(badCsr){notify(`"${badCsr.csr}" on S.No ${badCsr.movementNo} is not a CSR code. Use a code from the CSR table.`,true);return}
   const assignments=allocateAll(state.rows,csrs,markets);
   const pins=ensurePins(localStorage,csrs);
   const payload=buildRoster(state.rows,assignments,csrs,markets,pins,state.serviceDate);
@@ -62,6 +64,7 @@ async function refreshResponses(passcode){
       const d=byNo.get(Number(r.movementNo));
       r.csrResponse=d?d.status:"Not published";
       if(d)r.csr=d.csr_code||"";
+      r.csrManual=false; // the chart now matches Supabase
     }
     render();
   }catch(e){notify(`Could not load CSR responses: ${e.message}`,true)}
@@ -163,6 +166,7 @@ function render(){
 function responseClass(status){
   return {Accepted:"is-accepted",Allocated:"is-allocated",Reallocated:"is-reallocated",Unassigned:"is-unassigned"}[status]||"is-none";
 }
+function knownCsrCodes(){return new Set(loadCsrs(localStorage).map(c=>c.csrCode))}
 function renderBody(){
   const tbody=$("#movementTable tbody");tbody.innerHTML="";
   visibleRows().forEach(({r,idx})=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
@@ -172,7 +176,15 @@ function renderBody(){
     else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response "+responseClass(r[f]);el.textContent=r[f]||"Not published"}
     else if(f==="remarks"){el=document.createElement("textarea");el.value=r[f]??""}
     else{el=document.createElement("input");el.value=r[f]??"";if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
-    el.title=headers[f];el.onchange=()=>{r[f]=el.value;r.userEdited=true;r.needsReview=validate(r).length>0;render()};td.appendChild(el);tr.appendChild(td)});
+    if(f==="csr"&&r.csrManual&&r.csr&&!knownCsrCodes().has(String(r.csr).trim().toUpperCase()))el.classList.add("bad-csr");
+    el.title=headers[f];el.onchange=()=>{
+      if(f==="csr"){
+        r.csrManual=true;
+        r[f]=String(el.value||"").trim().toUpperCase();
+        if(r[f]&&!knownCsrCodes().has(r[f]))toast(`"${r[f]}" is not a CSR code. Check the CSR table for the right code.`,true);
+      }else r[f]=el.value;
+      r.userEdited=true;r.needsReview=validate(r).length>0;render();
+    };td.appendChild(el);tr.appendChild(td)});
     const action=document.createElement("td"),del=document.createElement("button");del.className="icon-btn";del.title="Delete row";del.textContent="×";del.onclick=()=>{state.rows.splice(idx,1);render()};action.appendChild(del);tr.appendChild(action);tbody.appendChild(tr)});updateSummary()
 }
 function select(options,value){const s=document.createElement("select");options.forEach(o=>{const x=document.createElement("option");x.value=o;x.textContent=o||"Select";x.selected=o===value;s.appendChild(x)});return s}
