@@ -76,6 +76,18 @@ $("#refreshResponsesBtn").onclick=async()=>{
 };
 $("#saveBtn").onclick=saveLocal;
 $("#exportBtn").onclick=exportCsv;
+// Export PDF prints the table as it is on screen (sorted and filtered) to a landscape page; choose "Save as PDF" in the print dialog.
+$("#exportPdfBtn").onclick=()=>{
+  if(!state.rows.length){notify("Import a chart before exporting.",true);return}
+  $("#printTitle").textContent=`LPTI Movement Chart · ${state.serviceDate||""} · ${visibleRows().length} movement(s)`;
+  const table=$("#movementTable");
+  const avail=1500; // roughly the printable width of an A3 landscape page, in CSS pixels
+  const w=parseFloat(table.style.width)||table.scrollWidth;
+  table.style.zoom=w>avail?String(avail/w):"";
+  const done=()=>{table.style.zoom="";window.removeEventListener("afterprint",done)};
+  window.addEventListener("afterprint",done);
+  window.print();
+};
 $("#resetBtn").onclick=resetAll;
 
 function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"");toast(text,error)}
@@ -141,7 +153,22 @@ function visibleRows(){
   }
   return items;
 }
+// Column widths in CSS pixels. Short values (number, date, type, mode) stay narrow; names, pickup, drop and remarks get room.
+const COL_WIDTHS={movementNo:58,serviceDate:112,guestGroupName:230,fh:64,fileCode:118,pax:56,movementType:104,mode:86,serviceNumber:108,scheduledTime:92,pickup:200,dropoff:200,reportingTime:112,vehicle:130,transporter:170,reportAt:150,assistanceRequired:98,remarks:220,csr:86,csrResponse:130};
+function applyColumnWidths(){
+  const table=$("#movementTable");
+  let cg=table.querySelector("colgroup");
+  if(!cg){cg=document.createElement("colgroup");table.prepend(cg)}
+  cg.innerHTML="";
+  let total=0;
+  for(const f of [...fields,"action"]){
+    const w=COL_WIDTHS[f]||40;total+=w;
+    const col=document.createElement("col");col.style.width=w+"px";cg.appendChild(col);
+  }
+  table.style.width=total+"px";
+}
 function renderHeader(){
+  applyColumnWidths();
   const thead=$("#movementTable thead");thead.innerHTML="";
   const tr=document.createElement("tr"),ftr=document.createElement("tr");ftr.className="filter-row";
   fields.forEach(f=>{
