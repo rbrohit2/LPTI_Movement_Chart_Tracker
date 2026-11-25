@@ -5,6 +5,7 @@ import { allocateAll } from "./allocation.js";
 import { buildRoster, ensurePins } from "./roster.js";
 import { rpc } from "./supabase.js";
 import { initUnassigned } from "./unassigned.js";
+import { toast } from "./toast.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
 const $=s=>document.querySelector(s);
@@ -74,7 +75,7 @@ $("#saveBtn").onclick=saveLocal;
 $("#exportBtn").onclick=exportCsv;
 $("#resetBtn").onclick=resetAll;
 
-function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"")}
+function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"");toast(text,error)}
 function progress(p,text){$("#progressWrap").classList.remove("hidden");$("#progressBar").style.width=p+"%";$("#progressText").textContent=text}
 function blankRow(no=1){return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:"",fh:"",fileCode:"",pax:"",movementType:"",mode:"FLIGHT",serviceNumber:"",scheduledTime:"",pickup:"",dropoff:"",reportingTime:"",vehicle:"",transporter:"",reportAt:"",assistanceRequired:"REVIEW",remarks:"",csr:"",needsReview:true,userEdited:false}}
 
