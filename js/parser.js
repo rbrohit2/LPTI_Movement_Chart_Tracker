@@ -75,10 +75,14 @@ function parseNameCell(raw) {
 }
 
 function findFlight(text) {
+  // Printed flight with a time or a "TRAIN #" label is kept exactly as printed,
+  // e.g. "Lh 763 @ 0155", "AF215 @ 05:10", "TRAIN # 20175".
+  const printed = text.match(/TRAIN\s*#\s*\d{3,5}|[A-Za-z0-9]{2}\s?-?\d{2,4}\s*@\s*\d{2}[:.]?\d{2}/i);
+  if (printed) return printed[0].replace(/\s+/g, " ").trim();
   // Airline / rail-style alphanumeric numbers such as LH762, LH-760, 6E 1253, TG 331, VS-303.
-  // Separators are dropped so the same flight always reads the same way (LH763, LH760).
-  const alpha = text.match(/\b(?=[A-Z0-9]*[A-Z])[A-Z0-9]{2}[- ]?\d{2,4}\b/);
-  if (alpha) return alpha[0].replace(/[\s-]/g, "");
+  // Separators are dropped and case is normalised so the same flight always reads the same way.
+  const alpha = text.match(/\b(?=[A-Z0-9]*[A-Z])[A-Z0-9]{2}[- ]?\d{2,4}\b/i);
+  if (alpha) return alpha[0].replace(/[\s-]/g, "").toUpperCase();
   // Pure numeric train numbers, e.g. 22458 / 22469.
   const num = text.match(/\b\d{4,5}\b/);
   return num ? num[0] : "";
