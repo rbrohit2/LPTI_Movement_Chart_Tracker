@@ -43,6 +43,7 @@ function card(b, onAction) {
   grid.className = "booking-grid";
   grid.append(
     field("Guest group", b.guest_group),
+    field("FH", b.fh),
     field("File code", b.file_code),
     field("Pax", b.pax),
     field("Pickup", b.pickup),
