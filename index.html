@@ -75,6 +75,7 @@
         <label>Airport pass<select id="csrPass" required></select></label>
         <label>Mobile<input id="csrMobile" inputmode="numeric" autocomplete="off" required></label>
         <label>CSR code<input id="csrCode" maxlength="4" autocomplete="off" required></label>
+        <label>Availability<select id="csrAvailability" required></select></label>
         <div class="csr-actions">
           <button id="csrSubmit" class="btn primary" type="submit">Add CSR</button>
           <button id="csrCancel" class="btn hidden" type="button">Cancel</button>
@@ -83,7 +84,27 @@
       <div id="csrMessage" class="message hidden" role="status"></div>
       <div class="table-wrap">
         <table id="csrTable">
-          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th></th></tr></thead>
+          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th>Availability</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="marketSection" class="card csr-card">
+      <h2>Market language <span id="marketCount" class="pill">0</span></h2>
+      <p>Language required for each market (file-code prefix). Used later to match CSRs by language.</p>
+      <form id="marketForm" class="csr-form">
+        <label>Market<input id="marketCode" maxlength="4" autocomplete="off" required></label>
+        <label>Language required<select id="marketLanguage" required></select></label>
+        <div class="csr-actions">
+          <button id="marketSubmit" class="btn primary" type="submit">Add market</button>
+          <button id="marketCancel" class="btn hidden" type="button">Cancel</button>
+        </div>
+      </form>
+      <div id="marketMessage" class="message hidden" role="status"></div>
+      <div class="table-wrap">
+        <table id="marketTable">
+          <thead><tr><th>Market</th><th>Language Required</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
