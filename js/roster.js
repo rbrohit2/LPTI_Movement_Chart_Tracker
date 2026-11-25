@@ -38,6 +38,7 @@ export function buildRoster(rows, assignments, csrs, markets, pins, serviceDate)
       movement_no: r.movementNo,
       service_date: serviceDate,
       guest_group: r.guestGroupName || "",
+      fh: r.fh || "",
       file_code: r.fileCode || "",
       pax: r.pax || "",
       movement_type: r.movementType || "",

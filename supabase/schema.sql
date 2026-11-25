@@ -38,6 +38,7 @@ create table if not exists roster (
   status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Rejected', 'Unassigned')),
   rejected_by    text[] not null default '{}',
   roster_key     text,
+  fh             text not null default '',
   unique (service_date, movement_no)
 );
 
@@ -56,6 +57,7 @@ alter table operator_auth enable row level security;
 alter table roster add column if not exists roster_key text;
 update roster set roster_key = to_char(service_date, 'YYYY-MM-DD') || '_' || movement_no where roster_key is null;
 create unique index if not exists roster_roster_key_uq on roster (roster_key);
+alter table roster add column if not exists fh text not null default '';
 
 -- Status list gained 'Rejected' (a booking passed on after a CSR rejected it). Replaces the old check. Safe to run again.
 alter table roster drop constraint if exists roster_status_check;
@@ -147,16 +149,17 @@ begin
     v_key := p_date::text || '_' || ((r->>'movement_no')::int)::text;
     insert into roster (roster_key, service_date, movement_no, guest_group, file_code, pax, movement_type, mode, flight,
                         scheduled_time, pickup, dropoff, reporting_time, vehicle, report_at, language_code,
-                        airport, csr_code, status)
+                        airport, csr_code, status, fh)
     values (v_key, p_date, (r->>'movement_no')::int, coalesce(r->>'guest_group', ''), coalesce(r->>'file_code', ''),
             coalesce(r->>'pax', ''), coalesce(r->>'movement_type', ''), coalesce(r->>'mode', ''),
             coalesce(r->>'flight', ''), coalesce(r->>'scheduled_time', ''), coalesce(r->>'pickup', ''),
             coalesce(r->>'dropoff', ''), coalesce(r->>'reporting_time', ''), coalesce(r->>'vehicle', ''),
             coalesce(r->>'report_at', ''), coalesce(r->>'language_code', ''),
             coalesce((r->>'airport')::boolean, false), nullif(r->>'csr_code', ''),
-            coalesce(r->>'status', 'Allocated'))
+            coalesce(r->>'status', 'Allocated'), coalesce(r->>'fh', ''))
     on conflict (roster_key) do update set
       guest_group    = excluded.guest_group,
+      fh             = excluded.fh,
       file_code      = excluded.file_code,
       pax            = excluded.pax,
       movement_type  = excluded.movement_type,
