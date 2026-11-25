@@ -1,4 +1,4 @@
-# LPTI Movement Chart Tracker — MVP v0.1
+# LPTI Movement Chart Tracker — MVP v0.2
 
 Browser-only GitHub Pages app for uploading a daily movement-chart PDF and reviewing the extracted movements in an editable table.
 
