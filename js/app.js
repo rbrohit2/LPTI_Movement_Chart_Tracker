@@ -51,7 +51,7 @@ async function publishRoster(){
     await refreshResponses(passcode);
   }catch(e){notify(`Publish failed: ${e.message}`,true)}
 }
-// Fills the CSR Response column with each booking's status from Supabase (Allocated, Accepted, Rejected, Unassigned),
+// Fills the CSR Response column with each booking's status from Supabase (Allocated, Accepted, Reallocated, Unassigned),
 // and shows the CSR it is currently with.
 async function refreshResponses(passcode){
   try{
@@ -160,7 +160,7 @@ function render(){
 }
 // Colour class for a CSR Response status.
 function responseClass(status){
-  return {Accepted:"is-accepted",Allocated:"is-allocated",Rejected:"is-rejected",Unassigned:"is-unassigned"}[status]||"is-none";
+  return {Accepted:"is-accepted",Allocated:"is-allocated",Reallocated:"is-reallocated",Unassigned:"is-unassigned"}[status]||"is-none";
 }
 function renderBody(){
   const tbody=$("#movementTable tbody");tbody.innerHTML="";

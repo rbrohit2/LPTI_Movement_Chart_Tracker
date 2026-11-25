@@ -30,7 +30,7 @@ function card(b, onAction) {
   time.textContent = b.scheduled_time || "Time not set";
   const badge = document.createElement("span");
   badge.className = "badge" + (b.status === "Accepted" ? " accepted" : "");
-  badge.textContent = b.status === "Rejected" ? "Passed to you" : b.status;
+  badge.textContent = b.status;
   top.append(time, badge);
   el.appendChild(top);
 
@@ -56,8 +56,8 @@ function card(b, onAction) {
 
   const actions = document.createElement("div");
   actions.className = "booking-actions";
-  // "Rejected" here means another CSR rejected it and it was passed to this CSR; they can still accept or reject.
-  if (b.status === "Allocated" || b.status === "Rejected") {
+  // "Reallocated" means another CSR rejected it and it was passed to this CSR; they can still accept or reject.
+  if (b.status === "Allocated" || b.status === "Reallocated") {
     const acc = document.createElement("button");
     acc.className = "btn primary";
     acc.textContent = "Accept";
