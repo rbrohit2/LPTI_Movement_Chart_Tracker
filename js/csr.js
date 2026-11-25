@@ -170,6 +170,11 @@ function fillSelect(doc, sel, options) {
 
 const languageOptions = () => Object.entries(LANGUAGES).map(([code, label]) => [code, `${label} (${code})`]);
 
+// PINs are created on publish (js/roster.js) and kept in this browser under this key.
+export function readPins(storage) {
+  try { return JSON.parse(storage.getItem("lptiCsrPins") || "{}") || {}; } catch { return {}; }
+}
+
 export function initCsrSection(doc, storage) {
   const $ = (s) => doc.querySelector(s);
   let list = loadCsrs(storage);
@@ -204,9 +209,10 @@ export function initCsrSection(doc, storage) {
   const paint = () => {
     const tbody = $("#csrTable tbody");
     tbody.innerHTML = "";
+    const pins = readPins(storage);
     list.forEach((r, i) => {
       const tr = doc.createElement("tr");
-      const cells = [i + 1, r.name, LANGUAGES[r.languageCode] || r.languageCode, r.airportPass, r.mobile, r.csrCode, r.availability];
+      const cells = [i + 1, r.name, LANGUAGES[r.languageCode] || r.languageCode, r.airportPass, r.mobile, r.csrCode, pins[r.csrCode] || "—", r.availability];
       for (const c of cells) {
         const td = doc.createElement("td");
         td.textContent = String(c);

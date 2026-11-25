@@ -2,6 +2,9 @@ import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/
 import { parseMovementPages } from "./parser.js";
 import { initCsrSection, initMarketSection, loadCsrs, loadMarkets } from "./csr.js";
 import { allocateAll } from "./allocation.js";
+import { buildRoster, ensurePins } from "./roster.js";
+import { rpc } from "./supabase.js";
+import { initUnassigned } from "./unassigned.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
 const $=s=>document.querySelector(s);
@@ -26,6 +29,26 @@ $("#allocateBtn").onclick=()=>{
   const n=out.filter(a=>a.csrId).length;
   notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.`,n<out.length);render();
 };
+$("#publishBtn").onclick=publishRoster;
+initUnassigned(document,()=>state.serviceDate);
+async function publishRoster(){
+  if(!state.rows.length){notify("Import a chart and allocate CSRs before publishing.",true);return}
+  const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
+  if(!csrs.length){notify("Add CSRs before publishing.",true);return}
+  const passcode=prompt("Operator passcode:");
+  if(!passcode)return;
+  const assignments=allocateAll(state.rows,csrs,markets);
+  const pins=ensurePins(localStorage,csrs);
+  const payload=buildRoster(state.rows,assignments,csrs,markets,pins,state.serviceDate);
+  if(!payload.rows.length){notify("No movements need a CSR, nothing to publish.",true);return}
+  notify("Publishing…");
+  try{
+    const count=await rpc("publish_roster",{p_pass:passcode,p_date:state.serviceDate,p_csrs:payload.csrs,p_rows:payload.rows});
+    const pinText=csrs.map(c=>`${c.name} ${pins[c.csrCode]}`).join(" · ");
+    notify(`Published ${count} booking(s) for ${state.serviceDate}. Share publish.html with CSRs. PINs: ${pinText}`);
+    render();
+  }catch(e){notify(`Publish failed: ${e.message}`,true)}
+}
 $("#saveBtn").onclick=saveLocal;
 $("#exportBtn").onclick=exportCsv;
 $("#resetBtn").onclick=resetAll;

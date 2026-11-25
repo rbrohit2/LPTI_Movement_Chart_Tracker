@@ -42,6 +42,7 @@
           <p id="fileMeta">Review all highlighted values before saving.</p>
         </div>
         <div class="toolbar">
+          <button id="publishBtn" class="btn primary">Publish to CSRs</button>
           <button id="allocateBtn" class="btn primary">Allocate CSR</button>
           <button id="addRowBtn" class="btn">+ Add row</button>
           <button id="saveBtn" class="btn primary">Save locally</button>
@@ -55,6 +56,21 @@
         <div class="table-wrap">
           <table id="movementTable">
             <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="unassignedSection" class="card csr-card">
+        <h2>Unassigned bookings <span id="unassignedCount" class="pill">0</span></h2>
+        <p>Bookings that every available CSR has rejected, or that no free CSR could take. Assign them by hand.</p>
+        <div class="csr-actions">
+          <button id="loadUnassignedBtn" class="btn" type="button">Load unassigned for this date</button>
+        </div>
+        <div id="unassignedMessage" class="message hidden" role="status"></div>
+        <div class="table-wrap">
+          <table id="unassignedTable">
+            <thead><tr><th>Time</th><th>S.No.</th><th>Guest</th><th>File code</th><th>Pickup</th><th>Drop</th><th>Rejected by</th><th>Assign to</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -85,7 +101,7 @@
       <div id="csrMessage" class="message hidden" role="status"></div>
       <div class="table-wrap">
         <table id="csrTable">
-          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th>Availability</th><th></th></tr></thead>
+          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th>PIN</th><th>Availability</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
