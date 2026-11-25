@@ -35,7 +35,7 @@ create table if not exists roster (
   language_code  text not null default '',
   airport        boolean not null default false,
   csr_code       text references csr_members(csr_code),
-  status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Unassigned')),
+  status         text not null default 'Allocated' check (status in ('Allocated', 'Accepted', 'Rejected', 'Unassigned')),
   rejected_by    text[] not null default '{}',
   roster_key     text,
   unique (service_date, movement_no)
@@ -56,6 +56,10 @@ alter table operator_auth enable row level security;
 alter table roster add column if not exists roster_key text;
 update roster set roster_key = to_char(service_date, 'YYYY-MM-DD') || '_' || movement_no where roster_key is null;
 create unique index if not exists roster_roster_key_uq on roster (roster_key);
+
+-- Status list gained 'Rejected' (a booking passed on after a CSR rejected it). Replaces the old check. Safe to run again.
+alter table roster drop constraint if exists roster_status_check;
+alter table roster add constraint roster_status_check check (status in ('Allocated', 'Accepted', 'Rejected', 'Unassigned'));
 
 -- ---------- helpers ----------
 
@@ -253,7 +257,8 @@ begin
     return 'Unassigned';
   end if;
 
-  update roster set csr_code = v_new, status = 'Allocated', rejected_by = v_rejected where id = p_id;
+  -- 'Rejected' means it was passed on after a rejection and the new CSR has not yet responded.
+  update roster set csr_code = v_new, status = 'Rejected', rejected_by = v_rejected where id = p_id;
   return 'Reassigned';
 end;
 $$;
@@ -290,5 +295,15 @@ begin
 end;
 $$;
 
+-- Every booking for the date with its current CSR Response status, for the operator's table.
+create or replace function list_roster(p_pass text, p_date date)
+returns setof roster language plpgsql security definer set search_path = public as $$
+begin
+  if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
+  return query select * from roster r where r.service_date = p_date order by r.movement_no;
+end;
+$$;
+
+grant execute on function list_roster(text, date) to anon, authenticated;
 grant execute on function list_unassigned(text, date) to anon, authenticated;
 grant execute on function assign_booking(text, bigint, text) to anon, authenticated;

@@ -86,17 +86,29 @@ export function pickCsr(row, csrs, markets, load, exclude = new Set()) {
   };
 }
 
-// Allocate every movement that needs assistance. Earlier times are placed first.
+// Flight or train number in a comparable form: "LH 762" -> "LH762", "Lh 763 @ 0155" -> "LH763", "TRAIN # 20175" -> "TRAIN20175".
+export function flightKey(serviceNumber) {
+  return String(serviceNumber || "").toUpperCase().replace(/@.*$/, "").replace(/[^A-Z0-9]/g, "");
+}
+
+// Allocate every movement. Earlier times are placed first.
+// Movements on the same flight or train share one CSR: the first one picks, the rest follow it.
 export function allocateAll(rows, csrs, markets) {
   const ordered = rows.slice().sort((a, b) => (minutesOf(a) ?? 9999) - (minutesOf(b) ?? 9999) || a.movementNo - b.movementNo);
   const assignments = [];
   const load = new Map();
+  const byFlight = new Map(); // flight key -> { csrId, status }
   for (const row of ordered) {
-    if (row.assistanceRequired === "NO") {
-      assignments.push({ movementNo: row.movementNo, csrId: "", status: "Not required", reason: "Escort declined" });
-      continue;
+    const key = flightKey(row.serviceNumber);
+    const group = key ? byFlight.get(key) : null;
+    const groupCsr = group ? csrs.find((c) => c.id === group.csrId) : null;
+    let pick;
+    if (groupCsr && groupCsr.availability === "Available") {
+      pick = { csrId: groupCsr.id, status: group.status, reason: `Same flight or train ${key} as an earlier movement` };
+    } else {
+      pick = pickCsr(row, csrs, markets, load);
+      if (key && pick.csrId) byFlight.set(key, { csrId: pick.csrId, status: pick.status });
     }
-    const pick = pickCsr(row, csrs, markets, load);
     assignments.push({ movementNo: row.movementNo, ...pick });
     if (pick.csrId) {
       const e = load.get(pick.csrId) || { count: 0, times: [] };

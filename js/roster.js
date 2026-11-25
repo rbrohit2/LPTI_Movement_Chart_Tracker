@@ -31,7 +31,7 @@ export function buildRoster(rows, assignments, csrs, markets, pins, serviceDate)
   const rowPayload = [];
   for (const r of rows) {
     const a = byNo.get(r.movementNo);
-    if (!a || a.status === "Not required") continue;
+    if (!a) continue;
     const holder = a.csrId ? csrById.get(a.csrId) : null;
     const airport = (r.movementType === "ARRIVAL" || r.movementType === "DEPARTURE") && (r.mode === "FLIGHT" || r.mode === "TRAIN");
     rowPayload.push({
