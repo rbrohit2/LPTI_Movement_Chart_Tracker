@@ -218,3 +218,32 @@ grant execute on function publish_roster(text, date, jsonb, jsonb) to anon, auth
 grant execute on function list_csrs() to anon, authenticated;
 grant execute on function my_roster(text, text, date) to anon, authenticated;
 grant execute on function respond_booking(text, text, bigint, text) to anon, authenticated;
+
+-- ---------- Operator side: unassigned bookings ----------
+
+-- Bookings every eligible CSR has rejected (or no CSR was free for), for the operator to assign by hand.
+create or replace function list_unassigned(p_pass text, p_date date)
+returns setof roster language plpgsql security definer set search_path = public as $$
+begin
+  if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
+  return query
+    select * from roster r
+    where r.service_date = p_date and r.status = 'Unassigned'
+    order by minutes_of(r.scheduled_time) nulls last, r.movement_no;
+end;
+$$;
+
+-- The operator gives an unassigned booking to a CSR. The CSR sees it as Allocated.
+create or replace function assign_booking(p_pass text, p_id bigint, p_csr text)
+returns text language plpgsql security definer set search_path = public as $$
+begin
+  if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
+  if not exists (select 1 from csr_members where csr_code = p_csr) then raise exception 'Unknown CSR'; end if;
+  update roster set csr_code = p_csr, status = 'Allocated' where id = p_id and status = 'Unassigned';
+  if not found then raise exception 'Booking is not unassigned'; end if;
+  return 'Allocated';
+end;
+$$;
+
+grant execute on function list_unassigned(text, date) to anon, authenticated;
+grant execute on function assign_booking(text, bigint, text) to anon, authenticated;

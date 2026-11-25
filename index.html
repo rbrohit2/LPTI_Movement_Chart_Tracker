@@ -61,6 +61,21 @@
         </div>
       </section>
 
+      <section id="unassignedSection" class="card csr-card">
+        <h2>Unassigned bookings <span id="unassignedCount" class="pill">0</span></h2>
+        <p>Bookings that every available CSR has rejected, or that no free CSR could take. Assign them by hand.</p>
+        <div class="csr-actions">
+          <button id="loadUnassignedBtn" class="btn" type="button">Load unassigned for this date</button>
+        </div>
+        <div id="unassignedMessage" class="message hidden" role="status"></div>
+        <div class="table-wrap">
+          <table id="unassignedTable">
+            <thead><tr><th>Time</th><th>S.No.</th><th>Guest</th><th>File code</th><th>Pickup</th><th>Drop</th><th>Rejected by</th><th>Assign to</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
       <details class="card debug-card">
         <summary>Extraction diagnostics</summary>
         <p>Use this only when a PDF layout is not parsed correctly.</p>
@@ -86,7 +101,7 @@
       <div id="csrMessage" class="message hidden" role="status"></div>
       <div class="table-wrap">
         <table id="csrTable">
-          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th>Availability</th><th></th></tr></thead>
+          <thead><tr><th>S.No.</th><th>Name</th><th>Language</th><th>Airport pass</th><th>Mobile</th><th>CSR code</th><th>PIN</th><th>Availability</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>

@@ -4,6 +4,7 @@ import { initCsrSection, initMarketSection, loadCsrs, loadMarkets } from "./csr.
 import { allocateAll } from "./allocation.js";
 import { buildRoster, ensurePins } from "./roster.js";
 import { rpc } from "./supabase.js";
+import { initUnassigned } from "./unassigned.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
 const $=s=>document.querySelector(s);
@@ -29,6 +30,7 @@ $("#allocateBtn").onclick=()=>{
   notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.`,n<out.length);render();
 };
 $("#publishBtn").onclick=publishRoster;
+initUnassigned(document,()=>state.serviceDate);
 async function publishRoster(){
   if(!state.rows.length){notify("Import a chart and allocate CSRs before publishing.",true);return}
   const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
