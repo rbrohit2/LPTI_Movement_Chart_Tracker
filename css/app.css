@@ -21,3 +21,27 @@
 
 /* CSR code typed by hand that is not in the CSR table */
 #movementTable input.bad-csr{border-color:#c0392b;background:#ffe5e5;color:#8f1d1d;font-weight:650}
+
+/* Movement table: fixed column widths (set in app.js), compact cells */
+#movementTable{table-layout:fixed;border-collapse:collapse}
+#movementTable th{white-space:normal;line-height:1.2;vertical-align:middle;padding:6px 6px}
+#movementTable td{padding:3px 4px;vertical-align:middle;overflow:hidden}
+#movementTable td input,#movementTable td select,#movementTable td textarea{width:100%;box-sizing:border-box;min-width:0;font-size:12.5px;padding:3px 5px;min-height:28px}
+#movementTable td textarea{height:28px;resize:none}
+#movementTable .filter-row input{font-size:12px}
+
+/* Print / PDF: landscape, no toolbar, filters or action column */
+.print-only{display:none}
+@media print{
+  @page{size:A3 landscape;margin:8mm}
+  body *{visibility:hidden}
+  #printArea,#printArea *,.print-only,.print-only *{visibility:visible}
+  #printArea{position:absolute;left:0;top:0;width:100%;box-shadow:none;border:0;background:#fff}
+  .print-only{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+  .legend,.filter-row,#movementTable th:last-child,#movementTable td:last-child{display:none!important}
+  .table-wrap{overflow:visible!important;max-height:none!important}
+  #movementTable{font-size:11px}
+  #movementTable td input,#movementTable td select,#movementTable td textarea{border:0;background:transparent;font-size:11px;padding:1px 2px;min-height:0;appearance:none}
+  #movementTable tr{break-inside:avoid}
+  -webkit-print-color-adjust:exact;print-color-adjust:exact
+}

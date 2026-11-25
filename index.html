@@ -48,11 +48,13 @@
           <button id="addRowBtn" class="btn">+ Add row</button>
           <button id="saveBtn" class="btn primary">Save locally</button>
           <button id="exportBtn" class="btn">Export CSV</button>
+          <button id="exportPdfBtn" class="btn">Export PDF</button>
           <button id="resetBtn" class="btn danger">Clear</button>
         </div>
       </section>
 
-      <section class="card table-card">
+      <section class="card table-card" id="printArea">
+        <div class="print-only" id="printTitle"></div>
         <div class="legend"><span><i class="dot review"></i> Review suggested</span><span><i class="dot edited"></i> User edited</span></div>
         <div class="table-wrap">
           <table id="movementTable">
