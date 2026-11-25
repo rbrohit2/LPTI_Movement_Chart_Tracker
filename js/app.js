@@ -1,12 +1,13 @@
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.min.mjs";
 import { parseMovementPages } from "./parser.js";
-import { initCsrSection, initMarketSection } from "./csr.js";
+import { initCsrSection, initMarketSection, loadCsrs, loadMarkets } from "./csr.js";
+import { allocateAll } from "./allocation.js";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.min.mjs";
 
 const $=s=>document.querySelector(s);
 const state={rows:[],fileName:"",serviceDate:"",rawText:""};
-const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks"];
-const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Reviewed?",remarks:"Remarks"};
+const fields=["movementNo","serviceDate","guestGroupName","fh","fileCode","pax","movementType","mode","serviceNumber","scheduledTime","pickup","dropoff","reportingTime","vehicle","transporter","reportAt","assistanceRequired","remarks","csr"];
+const headers={movementNo:"S.No.",serviceDate:"Date",guestGroupName:"FIT / Group",fh:"FH",fileCode:"File Code",pax:"Pax",movementType:"Type",mode:"Mode",serviceNumber:"Flight / Train",scheduledTime:"Scheduled",pickup:"Pickup",dropoff:"Drop",reportingTime:"Report / Pickup",vehicle:"Vehicle",transporter:"Transporter",reportAt:"Report At",assistanceRequired:"Reviewed?",remarks:"Remarks",csr:"CSR"};
 
 $("#chooseBtn").onclick=()=>$("#pdfInput").click();
 $("#dropZone").onclick=e=>{if(e.target.id!=="chooseBtn")$("#pdfInput").click()};
@@ -16,13 +17,22 @@ $("#pdfInput").onchange=e=>e.target.files[0]&&loadPdf(e.target.files[0]);
 ["dragleave","drop"].forEach(n=>$("#dropZone").addEventListener(n,e=>{e.preventDefault();$("#dropZone").classList.remove("drag")}));
 $("#dropZone").addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPdf(f)});
 $("#addRowBtn").onclick=()=>{state.rows.push(blankRow(state.rows.length+1));render()};
+$("#allocateBtn").onclick=()=>{
+  if(!state.rows.length){notify("Import a chart before allocating CSRs.",true);return}
+  const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
+  const out=allocateAll(state.rows,csrs,markets);
+  for(const a of out){const r=state.rows.find(x=>x.movementNo===a.movementNo);if(!r)continue;
+    const c=csrs.find(x=>x.id===a.csrId);r.csr=c?`${c.csrCode} · ${a.status}`:a.status;r.csrReason=a.reason;r.userEdited=false}
+  const n=out.filter(a=>a.csrId).length;
+  notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.`,n<out.length);render();
+};
 $("#saveBtn").onclick=saveLocal;
 $("#exportBtn").onclick=exportCsv;
 $("#resetBtn").onclick=resetAll;
 
 function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"")}
 function progress(p,text){$("#progressWrap").classList.remove("hidden");$("#progressBar").style.width=p+"%";$("#progressText").textContent=text}
-function blankRow(no=1){return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:"",fh:"",fileCode:"",pax:"",movementType:"",mode:"FLIGHT",serviceNumber:"",scheduledTime:"",pickup:"",dropoff:"",reportingTime:"",vehicle:"",transporter:"",reportAt:"",assistanceRequired:"REVIEW",remarks:"",needsReview:true,userEdited:false}}
+function blankRow(no=1){return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:"",fh:"",fileCode:"",pax:"",movementType:"",mode:"FLIGHT",serviceNumber:"",scheduledTime:"",pickup:"",dropoff:"",reportingTime:"",vehicle:"",transporter:"",reportAt:"",assistanceRequired:"REVIEW",remarks:"",csr:"",needsReview:true,userEdited:false}}
 
 async function loadPdf(file){
   if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){notify("Please select a PDF file.",true);return}
