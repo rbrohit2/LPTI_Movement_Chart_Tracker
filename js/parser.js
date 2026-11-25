@@ -31,9 +31,6 @@ const COLUMNS = [
 // last line and the next block's first line.
 const BAND_OFFSET = 8;
 
-// Printed locations that appear on a transporter line. Kept as "Transporter (Location)".
-const TRANSPORTER_LOCATIONS = ["Shanti Niketan"];
-
 const AIRPORT_STOPWORDS =new Set(["PAX", "AND", "THE", "FOR", "MODE", "TIME", "FROM", "AC", "SL", "FIT", "GRP", "NOT"]);
 
 function columnRanges(width) {
@@ -106,6 +103,23 @@ function parseLeg(items) {
   return { text, time, flight, place, mode };
 }
 
+// The Transport / Report At cell holds the transporter name on its first line and,
+// when a report location is printed, that location on a lower line (about 35pt down).
+// Single-line cells are transporter only.
+function splitTransporterCell(items) {
+  const sorted = items.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+  const lines = [];
+  for (const it of sorted) {
+    const last = lines.at(-1);
+    if (last && Math.abs(it.y - last.y) <= 3) last.items.push(it);
+    else lines.push({ y: it.y, items: [it] });
+  }
+  if (lines.length < 2) return { transporter: joinItems(items), reportAt: "" };
+  const reportLine = lines.at(-1);
+  const transporterItems = lines.slice(0, -1).flatMap((l) => l.items);
+  return { transporter: joinItems(transporterItems), reportAt: joinItems(reportLine.items) };
+}
+
 function assistance(remarks, assistCell) {
   const t = `${assistCell} ${remarks}`;
   if (/NO\s+(ESCORT|ASSIST)/i.test(t)) return "NO";
@@ -134,16 +148,8 @@ function interpretBlock(serial, items, cols, serviceDate) {
   const place = movementType === "DEPARTURE" ? leg?.place || "" : arr?.place || dep?.place || "";
   const mode = leg?.mode || "";
 
-  const transporterRaw = joinItems(cell.transporter);
-  const reportCity = /\bDelhi\b/.test(transporterRaw) ? "Delhi" : "";
-  // Transporter (Location): a printed location on the transporter line is kept in brackets.
-  const transporterLocation = TRANSPORTER_LOCATIONS.find((l) => transporterRaw.includes(l)) || "";
-  let transporter = transporterRaw.replace(/\bDelhi\b/g, "");
-  if (transporterLocation) transporter = transporter.replace(transporterLocation, "");
-  transporter = transporter.replace(/\s+/g, " ").trim();
-  if (transporterLocation) transporter = `${transporter} (${transporterLocation})`;
-  let remarks = joinItems(cell.remarks);
-  if (reportCity) remarks = remarks ? `${remarks} | Report at ${reportCity}` : `Report at ${reportCity}`;
+  const { transporter, reportAt } = splitTransporterCell(cell.transporter);
+  const remarks = joinItems(cell.remarks);
 
   const assistanceRequired = assistance(remarks, joinItems(cell.assist));
   const validationErrors = [];
@@ -166,6 +172,7 @@ function interpretBlock(serial, items, cols, serviceDate) {
     reportingTime: normalizeTime(joinItems(cell.pickupTime)),
     vehicle: joinItems(cell.vehicle),
     transporter,
+    reportAt,
     assistanceRequired,
     remarks,
     place,
