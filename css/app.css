@@ -11,3 +11,10 @@
 .csr-response.is-reallocated{background:#ffe0c2;color:#7a3a00}
 .csr-response.is-unassigned{background:#ffd6d6;color:#8f1d1d}
 .csr-response.is-none{background:#e6eaee;color:#4a5a68}
+
+/* Pop-up notifications, bottom right */
+#toastStack{position:fixed;right:16px;bottom:16px;z-index:1000;display:grid;gap:8px;width:min(360px,calc(100vw - 32px))}
+.toast{position:relative;background:#17324a;color:#fff;padding:12px 36px 12px 14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.22);font-size:14px;line-height:1.4;animation:toast-in .2s ease-out}
+.toast.error{background:#8f1d1d}
+.toast-close{position:absolute;right:6px;top:6px;background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
+@keyframes toast-in{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}

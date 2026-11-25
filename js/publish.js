@@ -1,11 +1,13 @@
 // CSR bookings page. Loads one CSR's bookings for a date and lets them accept or reject.
 import { rpc } from "./supabase.js";
+import { toast } from "./toast.js";
 
 const $ = (s) => document.querySelector(s);
 const pageMsg = (text, isError = false) => {
   const m = $("#pageMessage");
   m.textContent = text;
   m.className = text ? "message" + (isError ? " error" : "") : "message hidden";
+  toast(text, isError);
 };
 
 const LABEL = { ARRIVAL: "Arrival", DEPARTURE: "Departure", TRANSFER: "Transfer", OTHER: "Other" };

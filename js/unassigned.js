@@ -1,5 +1,6 @@
 // Operator view of bookings nobody has taken. Lists them for the published date and lets the operator give each to a CSR.
 import { rpc } from "./supabase.js";
+import { toast } from "./toast.js";
 
 export function initUnassigned(doc, getDate) {
   const $ = (s) => doc.querySelector(s);
@@ -9,6 +10,7 @@ export function initUnassigned(doc, getDate) {
     const m = $("#unassignedMessage");
     m.textContent = text;
     m.className = text ? "message" + (isError ? " error" : "") : "message hidden";
+    toast(text, isError, doc);
   };
 
   const cell = (tr, text) => {

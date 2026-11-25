@@ -1,3 +1,4 @@
+import { toast } from "./toast.js";
 // CSR (Company Airport Service Representative) master list and the market-to-language table.
 // Data logic is pure so it can be tested in Node; the init functions wire it to the page.
 
@@ -188,6 +189,7 @@ export function initCsrSection(doc, storage) {
     const m = $("#csrMessage");
     m.textContent = text;
     m.className = text ? "message" + (isError ? " error" : "") : "message hidden";
+    toast(text, isError, doc);
   };
 
   const readForm = () => ({
@@ -288,6 +290,7 @@ export function initMarketSection(doc, storage) {
     const m = $("#marketMessage");
     m.textContent = text;
     m.className = text ? "message" + (isError ? " error" : "") : "message hidden";
+    toast(text, isError, doc);
   };
 
   const resetForm = () => {
