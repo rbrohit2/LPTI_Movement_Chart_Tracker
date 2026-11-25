@@ -158,13 +158,17 @@ function render(){
   renderHeader();
   renderBody();
 }
+// Colour class for a CSR Response status.
+function responseClass(status){
+  return {Accepted:"is-accepted",Allocated:"is-allocated",Rejected:"is-rejected",Unassigned:"is-unassigned"}[status]||"is-none";
+}
 function renderBody(){
   const tbody=$("#movementTable tbody");tbody.innerHTML="";
   visibleRows().forEach(({r,idx})=>{const tr=document.createElement("tr");tr.className=r.userEdited?"user-edited":r.needsReview?"needs-review":"";fields.forEach(f=>{const td=document.createElement("td");let el;
     if(f==="movementType"){el=select(["","ARRIVAL","DEPARTURE","TRANSFER","OTHER"],r[f])}
     else if(f==="mode"){el=select(["FLIGHT","TRAIN","ROAD","OTHER"],r[f])}
     else if(f==="assistanceRequired"){el=select(["REVIEW","YES","NO"],r[f])}
-    else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response";el.textContent=r[f]||"Not published"}
+    else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response "+responseClass(r[f]);el.textContent=r[f]||"Not published"}
     else if(f==="remarks"){el=document.createElement("textarea");el.value=r[f]??""}
     else{el=document.createElement("input");el.value=r[f]??"";if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
     el.title=headers[f];el.onchange=()=>{r[f]=el.value;r.userEdited=true;r.needsReview=validate(r).length>0;render()};td.appendChild(el);tr.appendChild(td)});
