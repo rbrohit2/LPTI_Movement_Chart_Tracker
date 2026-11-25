@@ -32,7 +32,8 @@ async function loadPdf(file){
     for(let n=1;n<=pdf.numPages;n++){
       progress(10+Math.round((n/pdf.numPages)*55),`Extracting page ${n} of ${pdf.numPages}`);
       const page=await pdf.getPage(n);const content=await page.getTextContent();
-      const items=content.items.map(i=>({text:(i.str||"").trim(),x:i.transform[4],y:i.transform[5],w:i.width,h:i.height})).filter(i=>i.text);
+      const viewport=page.getViewport({scale:1});
+      const items=content.items.map(i=>({text:(i.str||"").trim(),x:i.transform[4],y:i.transform[5],w:i.width,h:i.height,pageWidth:viewport.width,pageHeight:viewport.height})).filter(i=>i.text);
       pages.push(items);allText.push(items.sort((a,b)=>Math.abs(a.y-b.y)>2?b.y-a.y:a.x-b.x).map(i=>i.text).join(" "));
     }
     state.rawText=allText.join("\n\n--- PAGE ---\n\n");$("#rawText").value=state.rawText;
@@ -56,38 +57,79 @@ function detectDate(text){
 function parsePages(pages){
   const rows=[];
   for(const items of pages){
-    const width=Math.max(...items.map(i=>i.x+i.w),800);
-    const serials=items.filter(i=>/^\d{1,3}$/.test(i.text)&&i.x<width*.1).sort((a,b)=>b.y-a.y);
-    for(let s=0;s<serials.length;s++){
-      const top=serials[s].y+10,bottom=(serials[s+1]?.y??0)-5;
-      const band=items.filter(i=>i.y<=top&&i.y>bottom&&i.text!==serials[s].text);
-      if(band.length<2)continue;
-      const row=interpretBand(+serials[s].text,band,width);if(row)rows.push(row);
+    if(!items.length) continue;
+    const width=items[0].pageWidth||Math.max(...items.map(i=>i.x+i.w));
+    const height=items[0].pageHeight||Math.max(...items.map(i=>i.y));
+    const header=findHeader(items);
+    const serials=items.filter(i=>/^\d{1,3}$/.test(i.text) && i.x < width*.055 && i.y < header.bodyTop && i.y > 30)
+      .sort((a,b)=>b.y-a.y);
+    for(let n=0;n<serials.length;n++){
+      const s=serials[n];
+      const higher=serials[n-1];
+      const lower=serials[n+1];
+      const top=higher ? (higher.y+s.y)/2 : header.bodyTop;
+      const bottom=lower ? (s.y+lower.y)/2 : Math.max(18, header.footerTop);
+      const rowItems=items.filter(i=>i.y < top && i.y >= bottom && i.text!==s.text);
+      const row=interpretColumns(+s.text,rowItems,width,header);
+      if(row) rows.push(row);
     }
   }
-  const seen=new Set();return rows.filter(r=>{const k=`${r.movementNo}|${r.fileCode}|${r.scheduledTime}`;if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>a.movementNo-b.movementNo)
+  const seen=new Set();
+  return rows.filter(r=>{const k=`${r.movementNo}|${r.fileCode}|${r.serviceNumber}|${r.scheduledTime}`;if(seen.has(k))return false;seen.add(k);return true})
+             .sort((a,b)=>a.movementNo-b.movementNo);
 }
 
-function interpretBand(no,items,width){
-  const text=items.sort((a,b)=>b.y-a.y||a.x-b.x).map(i=>i.text).join(" | ");
-  const tokens=items.map(i=>i.text);
-  const fileCode=(text.match(/\b[A-Z]{2,5}\d{6,10}\b/i)||[])[0]||"";
-  const times=[...text.matchAll(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);
-  const service=(text.match(/\b[A-Z]{1,3}\s?\d{2,5}\b/)||[])[0]?.replace(/\s/g,"")||"";
-  const type=/\bDEP(?:ARTURE)?\b/i.test(text)?"DEPARTURE":/\bARR(?:IVAL)?\b/i.test(text)?"ARRIVAL":"";
-  const mode=/\bTRAIN|RAIL|RLY\b/i.test(text)?"TRAIN":/\bCOACH|ROAD\b/i.test(text)?"ROAD":"FLIGHT";
-  const paxMatch=text.match(/\b(?:PAX\s*)?(\d{1,3})\s*(?:PAX)?\b/i);
-  const noAssist=/NO\s+(ESCORT|ASSIST)/i.test(text);
-  const cols=[[],[],[],[],[],[],[],[],[]];
-  for(const i of items){const idx=Math.min(8,Math.floor((i.x/width)*9));cols[idx].push(i.text)}
-  const groupGuess=cols.slice(0,3).flat().filter(t=>t!==fileCode&&!/^\d+$/.test(t)&&!/^Daily|Name Of|S\. No/i.test(t)).join(" ");
-  const locations=tokens.filter(t=>/AIRPORT|IGI|TERMINAL|HOTEL|COURTYARD|STATION|T[123]\b/i.test(t));
-  const remarks=tokens.filter(t=>/ESCORT|ASSIST|MEET|REMARK|NO\s+/i.test(t)).join(" ");
-  const vehicle=tokens.find(t=>/INNOVA|URBANIA|COACH|TEMPO|SEDAN|SUV/i.test(t))||"";
-  const needs=!fileCode||!type||!times[0];
-  return{movementNo:no,serviceDate:state.serviceDate,guestGroupName:groupGuess.slice(0,180),fileCode,pax:paxMatch?paxMatch[1]:"",movementType:type,mode,serviceNumber:service,scheduledTime:times[0]||"",pickup:locations[0]||"",dropoff:locations[1]||"",reportingTime:times[1]||"",vehicle,transporter:"",assistanceRequired:noAssist?"NO":remarks?"YES":"REVIEW",remarks:remarks||text.slice(0,250),needsReview:needs||!remarks,userEdited:false}
+function findHeader(items){
+  const width=items[0]?.pageWidth||970;
+  const findX=(re,fallback)=>{const x=items.filter(i=>re.test(i.text)).map(i=>i.x);return x.length?Math.min(...x):fallback};
+  // Boundaries are proportions learned from the supplied LPTI landscape chart, but labels are used when available.
+  const x={no:0,name:width*.055,arrival:findX(/^Arrival$/i,width*.315),departure:findX(/^Departure$/i,width*.415),pickup:findX(/^Pickup$/i,width*.505),dropoff:findX(/^Dropoff$/i,width*.60),assist:findX(/Trnsfr|Assist/i,width*.68),vehicle:width*.73,transporter:width*.84,pickupTime:width*.92,remarks:width*.965,end:width};
+  const bodyCandidates=items.filter(i=>/Night Duty:/i.test(i.text)).map(i=>i.y);
+  const footerCandidates=items.filter(i=>/TUESDAY|MONDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY/i.test(i.text)&&i.y<80).map(i=>i.y);
+  return {x,bodyTop:bodyCandidates.length?Math.min(...bodyCandidates)-6:(items[0]?.pageHeight||695)*.79,footerTop:footerCandidates.length?Math.max(...footerCandidates)+10:28};
 }
 
+function clean(parts){return parts.map(x=>x.text.trim()).filter(Boolean).join(' ').replace(/\s+/g,' ').trim()}
+function byRange(items,a,b){return items.filter(i=>i.x>=a&&i.x<b).sort((u,v)=>v.y-u.y||u.x-v.x)}
+function allTimes(text){return [...text.matchAll(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/g)].map(m=>`${m[1].padStart(2,'0')}:${m[2]}`)}
+function serviceNo(text){const m=text.match(/\b(?:[A-Z]{1,3}[- ]?\d{2,5}|\d{4,5})\b/);return m?m[0].replace(/\s/g,''):''}
+function placeText(text){return text.replace(/\b(?:DEL|BOM|VNS|JAI|AGR|FRA|MUN|KTM)\b/gi,'').replace(/\b(?:[A-Z]{1,3}[- ]?\d{2,5}|\d{4,5})\b/g,'').replace(/\b(?:[01]?\d|2[0-3])[:.]([0-5]\d)\b/g,'').replace(/\s+/g,' ').trim()}
+
+function interpretColumns(no,items,width,header){
+  if(!items.length) return null;
+  const x=header.x;
+  const name=clean(byRange(items,x.name,x.arrival));
+  const arr=clean(byRange(items,x.arrival,x.departure));
+  const dep=clean(byRange(items,x.departure,x.pickup));
+  const pickupCol=clean(byRange(items,x.pickup,x.dropoff));
+  const dropCol=clean(byRange(items,x.dropoff,x.assist));
+  const assistCol=clean(byRange(items,x.assist,x.vehicle));
+  const vehicleCol=clean(byRange(items,x.vehicle,x.transporter));
+  const transporterCol=clean(byRange(items,x.transporter,x.pickupTime));
+  const pickupTimeCol=clean(byRange(items,x.pickupTime,x.remarks));
+  const remarksCol=clean(byRange(items,x.remarks,x.end));
+  const whole=clean(items);
+
+  const fc=(name.match(/FC:\s*([A-Z0-9-]+)/i)||whole.match(/FC:\s*([A-Z0-9-]+)/i)||[])[1]||'';
+  const pax=(name.match(/\bX\s*(\d{1,3})\b/i)||whole.match(/\bX\s*(\d{1,3})\s*PAX\b/i)||[])[1]||'';
+  const guest=name.replace(/\(?FC:\s*[A-Z0-9-]+\)?/ig,'').replace(/\bX\s*\d{1,3}\b/ig,'').replace(/\bPAX\b/ig,'').replace(/\s+/g,' ').trim();
+  const arrTimes=allTimes(arr),depTimes=allTimes(dep),pickupTimes=allTimes(pickupTimeCol);
+  const hasArr=!!serviceNo(arr)||arrTimes.length>0, hasDep=!!serviceNo(dep)||depTimes.length>0;
+  let movementType=hasArr&&!hasDep?'ARRIVAL':hasDep&&!hasArr?'DEPARTURE':hasArr&&hasDep?'TRANSFER':'';
+  let serviceNumber=movementType==='DEPARTURE'?serviceNo(dep):serviceNo(arr)||serviceNo(dep);
+  let scheduledTime=movementType==='DEPARTURE'?(depTimes.at(-1)||''):(arrTimes.at(-1)||depTimes.at(-1)||'');
+  const noAssist=/NO\s+(ESCORT|ASSIST)/i.test(assistCol+' '+remarksCol+' '+whole);
+  const yesAssist=/ASSIST|ESCORT|CSR|REP\b/i.test(assistCol+' '+remarksCol);
+  const reportingTime=pickupTimes.at(-1)||'';
+  const vehicle=vehicleCol.replace(/\s+/g,' ').trim();
+  const transporter=transporterCol.replace(/\s+/g,' ').trim();
+  // Arrival rows usually pick up at airport and drop at hotel; departures are the reverse. Explicit columns always win.
+  const pickup=placeText(pickupCol);
+  const dropoff=placeText(dropCol);
+  const errors=[];
+  if(!fc)errors.push('FILE_CODE');if(!movementType)errors.push('MOVEMENT_TYPE');if(!scheduledTime)errors.push('SCHEDULED_TIME');
+  return {movementNo:no,serviceDate:state.serviceDate,guestGroupName:guest,fileCode:fc,pax,movementType,mode:/TRAIN|RAIL/i.test(whole)||/^\d{4,5}$/.test(serviceNumber)?'TRAIN':'FLIGHT',serviceNumber,scheduledTime,pickup,dropoff,reportingTime,vehicle,transporter,assistanceRequired:noAssist?'NO':yesAssist?'YES':'REVIEW',remarks:remarksCol||assistCol,needsReview:errors.length>0||(!pickup&&!dropoff),validationErrors:errors,userEdited:false};
+}
 function parseTextFallback(text){
   const chunks=text.split(/(?=\b\d{1,3}\s+(?=[A-Z]))/g),rows=[];
   chunks.forEach((c,i)=>{const fc=(c.match(/\b[A-Z]{2,5}\d{6,10}\b/)||[])[0];if(!fc)return;const times=[...c.matchAll(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);rows.push({...blankRow(rows.length+1),fileCode:fc,scheduledTime:times[0]||"",remarks:c.trim().slice(0,300)})});return rows
