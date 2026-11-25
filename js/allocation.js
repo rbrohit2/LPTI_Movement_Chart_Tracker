@@ -92,10 +92,7 @@ export function allocateAll(rows, csrs, markets) {
   const assignments = [];
   const load = new Map();
   for (const row of ordered) {
-    if (row.assistanceRequired === "NO") {
-      assignments.push({ movementNo: row.movementNo, csrId: "", status: "Not required", reason: "Escort declined" });
-      continue;
-    }
+    // Every movement gets a CSR, including those marked escort NO, so the CSR can still accept it.
     const pick = pickCsr(row, csrs, markets, load);
     assignments.push({ movementNo: row.movementNo, ...pick });
     if (pick.csrId) {
