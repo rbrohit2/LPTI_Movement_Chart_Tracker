@@ -80,12 +80,6 @@ $("#exportBtn").onclick=exportCsv;
 $("#exportPdfBtn").onclick=()=>{
   if(!state.rows.length){notify("Import a chart before exporting.",true);return}
   $("#printTitle").textContent=`LPTI Movement Chart · ${state.serviceDate||""} · ${visibleRows().length} movement(s)`;
-  const table=$("#movementTable");
-  const avail=1500; // roughly the printable width of an A3 landscape page, in CSS pixels
-  const w=parseFloat(table.style.width)||table.scrollWidth;
-  table.style.zoom=w>avail?String(avail/w):"";
-  const done=()=>{table.style.zoom="";window.removeEventListener("afterprint",done)};
-  window.addEventListener("afterprint",done);
   window.print();
 };
 $("#resetBtn").onclick=resetAll;
@@ -153,19 +147,16 @@ function visibleRows(){
   }
   return items;
 }
-// Column widths in CSS pixels. Short values (number, date, type, mode) stay narrow; names, pickup, drop and remarks get room.
-const COL_WIDTHS={movementNo:58,serviceDate:112,guestGroupName:230,fh:64,fileCode:118,pax:56,movementType:104,mode:86,serviceNumber:108,scheduledTime:92,pickup:200,dropoff:200,reportingTime:112,vehicle:130,transporter:170,reportAt:150,assistanceRequired:98,remarks:220,csr:86,csrResponse:130};
+// Columns size to their content and the table fills the page width. Long text wraps inside each cell.
+const TEXT_FIELDS=new Set(["guestGroupName","fh","fileCode","serviceNumber","pickup","dropoff","vehicle","transporter","reportAt"]);
+function autosize(el){el.style.height="auto";el.style.height=el.scrollHeight+"px"}
 function applyColumnWidths(){
   const table=$("#movementTable");
   let cg=table.querySelector("colgroup");
   if(!cg){cg=document.createElement("colgroup");table.prepend(cg)}
   cg.innerHTML="";
-  let total=0;
-  for(const f of [...fields,"action"]){
-    const w=COL_WIDTHS[f]||40;total+=w;
-    const col=document.createElement("col");col.style.width=w+"px";cg.appendChild(col);
-  }
-  table.style.width=total+"px";
+  for(const f of [...fields,"action"])cg.appendChild(document.createElement("col"));
+  table.style.width="";
 }
 function renderHeader(){
   applyColumnWidths();
@@ -202,7 +193,7 @@ function renderBody(){
     else if(f==="assistanceRequired"){el=select(["REVIEW","YES","NO"],r[f])}
     else if(f==="csrResponse"){el=document.createElement("span");el.className="csr-response "+responseClass(r[f]);el.textContent=r[f]||"Not published"}
     else if(f==="remarks"){el=document.createElement("textarea");el.value=r[f]??""}
-    else{el=document.createElement("input");el.value=r[f]??"";if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
+    else{el=document.createElement(TEXT_FIELDS.has(f)?"textarea":"input");el.value=r[f]??"";if(TEXT_FIELDS.has(f)){el.rows=1;el.className="auto-wrap"}if(f==="serviceDate")el.type="date";if(["scheduledTime","reportingTime"].includes(f))el.type="time";if(["movementNo","pax"].includes(f))el.type="number"}
     if(f==="csr"&&r.csrManual&&r.csr&&!knownCsrCodes().has(String(r.csr).trim().toUpperCase()))el.classList.add("bad-csr");
     el.title=headers[f];el.onchange=()=>{
       if(f==="csr"){
@@ -211,7 +202,7 @@ function renderBody(){
         if(r[f]&&!knownCsrCodes().has(r[f]))toast(`"${r[f]}" is not a CSR code. Check the CSR table for the right code.`,true);
       }else r[f]=el.value;
       r.userEdited=true;r.needsReview=validate(r).length>0;render();
-    };td.appendChild(el);tr.appendChild(td)});
+    };td.appendChild(el);if(el.tagName==="TEXTAREA"){el.oninput=()=>autosize(el);requestAnimationFrame(()=>autosize(el))}tr.appendChild(td)});
     const action=document.createElement("td"),del=document.createElement("button");del.className="icon-btn";del.title="Delete row";del.textContent="×";del.onclick=()=>{state.rows.splice(idx,1);render()};action.appendChild(del);tr.appendChild(action);tbody.appendChild(tr)});updateSummary()
 }
 function select(options,value){const s=document.createElement("select");options.forEach(o=>{const x=document.createElement("option");x.value=o;x.textContent=o||"Select";x.selected=o===value;s.appendChild(x)});return s}

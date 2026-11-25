@@ -45,3 +45,12 @@
   #movementTable tr{break-inside:avoid}
   -webkit-print-color-adjust:exact;print-color-adjust:exact
 }
+
+/* Auto-sizing tables: rows grow with their text and long text wraps. Applies to every table. */
+#movementTable{table-layout:auto;width:100%}
+#movementTable td{overflow:visible;white-space:normal;overflow-wrap:anywhere;padding:4px 5px}
+#movementTable th{overflow-wrap:anywhere}
+#movementTable td textarea{height:auto;min-height:28px;resize:none;overflow:hidden;white-space:pre-wrap;line-height:1.35}
+.table-wrap table{width:100%;table-layout:auto}
+.table-wrap th,.table-wrap td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle}
+.table-wrap td input,.table-wrap td select{max-width:100%}
