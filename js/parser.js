@@ -61,18 +61,17 @@ function normalizeTime(t) {
 // Returns { fileCode, pax, guest } from the Name cell text.
 function parseNameCell(raw) {
   const fc = raw.match(/\(\s*FC:\s*([A-Z]{2,6}\d{6,}(?:-\d+)?)\s*\)/i);
-  if (!fc) return { fileCode: "", pax: "", guest: raw.replace(/\bPAX\b/gi, "").trim() };
+  if (!fc) return { fileCode: "", pax: "", operator: "", guest: raw.replace(/\bPAX\b/gi, "").trim() };
   const before = raw.slice(0, fc.index);
   const after = raw.slice(fc.index + fc[0].length);
   const paxMatch = after.match(/^\s*X\s*(\d{1,3})\b/i) || after.match(/^\s*(\d{1,3})\s*PAX\b/i);
-  // Drop the operator initials (e.g. "SL", "VM", "MS") printed just before "(FC:".
-  const guest = before
+  const cleaned = before
     .replace(/\bx\s*\d{1,3}\s*pax\b/gi, "") // "Classical India x 05 Pax" -> "Classical India"
-    .replace(/\bPAX\b/gi, "")
-    .replace(/\s+[A-Z]{1,3}\s*$/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return { fileCode: fc[1].toUpperCase(), pax: paxMatch ? paxMatch[1] : "", guest };
+    .replace(/\bPAX\b/gi, "");
+  // The 2-4 letter operator code printed just before "(FC:" (e.g. "SL", "VNM") is its own field.
+  const op = cleaned.match(/\s([A-Z]{2,4})\s*$/);
+  const guest = cleaned.replace(/\s+[A-Z]{2,4}\s*$/, "").replace(/\s+/g, " ").trim();
+  return { fileCode: fc[1].toUpperCase(), pax: paxMatch ? paxMatch[1] : "", operator: op ? op[1] : "", guest };
 }
 
 function findFlight(text) {
@@ -161,6 +160,7 @@ function interpretBlock(serial, items, cols, serviceDate) {
     movementNo: serial,
     serviceDate,
     guestGroupName: name.guest,
+    fh: name.operator,
     fileCode: name.fileCode,
     pax: name.pax,
     movementType,
