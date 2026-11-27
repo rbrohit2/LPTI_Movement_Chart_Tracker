@@ -131,7 +131,7 @@ $$;
 -- the new allocation; movements no longer on the chart are removed.
 create or replace function publish_roster(p_pass text, p_date date, p_csrs jsonb, p_rows jsonb)
 returns int language plpgsql security definer set search_path = public as $$
-declare c jsonb; r jsonb; n int := 0; s text; v_key text; v_manual boolean;
+declare c jsonb; r jsonb; n int := 0; s text; v_key text; v_manual boolean; lv text;
 begin
   if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
 
@@ -206,6 +206,11 @@ begin
     n := n + 1;
   end loop;
 
+  -- A CSR on leave for this date never keeps a booking from the chart, whatever the chart says.
+  for lv in select s.csr_code from csr_day_status s where s.service_date = p_date and s.status = 'On leave' loop
+    perform reallocate_leave_bookings(lv, p_date);
+  end loop;
+
   return n;
 end;
 $$;
@@ -227,6 +232,132 @@ begin
     select * from roster r
     where r.service_date = p_date and r.csr_code = p_csr
     order by (r.scheduled_time = '') , minutes_of(r.scheduled_time), r.movement_no;
+end;
+$$;
+
+-- ---------- CSR availability for the next 3 days ----------
+
+-- A CSR's own status for a service date. No row means Available. Only changes are stored.
+create table if not exists csr_day_status (
+  csr_code     text not null references csr_members(csr_code),
+  service_date date not null,
+  status       text not null default 'Available' check (status in ('Available', 'On leave')),
+  primary key (csr_code, service_date)
+);
+alter table csr_day_status enable row level security;
+
+-- Today in India (Asia/Kolkata), whatever the device's time zone. The availability window starts here.
+create or replace function ist_today()
+returns date language sql stable as $$
+  select (now() at time zone 'Asia/Kolkata')::date;
+$$;
+
+-- Locked once the CSR has accepted any booking on that date: their status for it can no longer change.
+create or replace function day_locked(p_csr text, p_date date)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from roster r
+    where r.service_date = p_date and r.csr_code = p_csr and r.status = 'Accepted'
+  );
+$$;
+
+-- The next CSR for a booking: must be Available overall, not on leave that date, not in the excluded list,
+-- with no booking within 90 minutes. Ordered by language, then airport pass, then lightest workload.
+-- Returns null when nobody is free.
+create or replace function pick_next_csr(p_booking roster, p_excluded text[])
+returns text language sql stable security definer set search_path = public as $$
+  select m.csr_code
+  from csr_members m
+  where m.availability = 'Available'
+    and not (m.csr_code = any (p_excluded))
+    and not exists (
+      select 1 from csr_day_status s
+      where s.csr_code = m.csr_code and s.service_date = p_booking.service_date and s.status = 'On leave'
+    )
+    and not exists (
+      select 1 from roster o
+      where o.service_date = p_booking.service_date
+        and o.csr_code = m.csr_code
+        and o.id <> p_booking.id
+        and minutes_of(o.scheduled_time) is not null
+        and minutes_of(p_booking.scheduled_time) is not null
+        and abs(minutes_of(o.scheduled_time) - minutes_of(p_booking.scheduled_time)) < 90
+    )
+  order by
+    (case when p_booking.language_code <> '' and m.language_code <> p_booking.language_code then 1 else 0 end),
+    (case when p_booking.airport and m.airport_pass <> 'YES' then 1 else 0 end),
+    (select count(*) from roster o where o.service_date = p_booking.service_date and o.csr_code = m.csr_code),
+    m.name
+  limit 1;
+$$;
+
+-- The CSR's status for each date in the window (today and the next 2 days, India time).
+create or replace function my_availability(p_csr text, p_pin text)
+returns table (day_date date, day_status text, is_locked boolean)
+language plpgsql security definer set search_path = public as $$
+begin
+  perform check_csr(p_csr, p_pin);
+  return query
+    select d.day::date,
+           coalesce(s.status, 'Available'),
+           day_locked(p_csr, d.day::date)
+    from generate_series(ist_today(), ist_today() + 2, interval '1 day') as d(day)
+    left join csr_day_status s on s.csr_code = p_csr and s.service_date = d.day::date
+    order by d.day;
+end;
+$$;
+
+-- Moves every booking a CSR holds on a date to the next free CSR (Unassigned if none). Used when a CSR goes on leave.
+-- Accepted bookings never reach here, because a date with an accepted booking is locked. Returns the number moved.
+create or replace function reallocate_leave_bookings(p_csr text, p_date date)
+returns int language plpgsql security definer set search_path = public as $$
+declare b roster; v_new text; n int := 0;
+begin
+  for b in
+    select * from roster r where r.service_date = p_date and r.csr_code = p_csr order by r.id for update
+  loop
+    v_new := pick_next_csr(b, b.rejected_by);
+    if v_new is null then
+      update roster set csr_code = null, status = 'Unassigned' where id = b.id;
+    else
+      update roster set csr_code = v_new, status = 'Reallocated' where id = b.id;
+    end if;
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+
+-- CSR codes that are On leave for a date. Public: the names are already public, and no bookings are shown.
+create or replace function list_csr_leave(p_date date)
+returns setof text language sql stable security definer set search_path = public as $$
+  select s.csr_code from csr_day_status s where s.service_date = p_date and s.status = 'On leave';
+$$;
+
+-- Set Available or On leave for one date in the window. Refused once the date is locked.
+-- Setting On leave moves the CSR's bookings for that date to the next free CSR (Unassigned if none).
+-- Returns how many bookings were moved or left unassigned.
+create or replace function set_my_availability(p_csr text, p_pin text, p_date date, p_status text)
+returns int language plpgsql security definer set search_path = public as $$
+declare n int := 0;
+begin
+  perform check_csr(p_csr, p_pin);
+  if p_status not in ('Available', 'On leave') then raise exception 'Status must be Available or On leave'; end if;
+  if p_date < ist_today() or p_date > ist_today() + 2 then
+    raise exception 'Availability can be set only for today and the next 2 days';
+  end if;
+  if day_locked(p_csr, p_date) then
+    raise exception 'You have accepted a booking on % so this status is locked', p_date;
+  end if;
+
+  insert into csr_day_status (csr_code, service_date, status) values (p_csr, p_date, p_status)
+  on conflict (csr_code, service_date) do update set status = excluded.status;
+
+  if p_status = 'On leave' then
+    n := reallocate_leave_bookings(p_csr, p_date);
+  end if;
+
+  return n;
 end;
 $$;
 
@@ -255,25 +386,7 @@ begin
   on conflict (csr_code, service_date)
     do update set rejected_count = csr_rejection_counts.rejected_count + 1;
 
-  select m.csr_code into v_new
-  from csr_members m
-  where m.availability = 'Available'
-    and not (m.csr_code = any (v_rejected))
-    and not exists (
-      select 1 from roster o
-      where o.service_date = b.service_date
-        and o.csr_code = m.csr_code
-        and o.id <> b.id
-        and minutes_of(o.scheduled_time) is not null
-        and minutes_of(b.scheduled_time) is not null
-        and abs(minutes_of(o.scheduled_time) - minutes_of(b.scheduled_time)) < 90
-    )
-  order by
-    (case when b.language_code <> '' and m.language_code <> b.language_code then 1 else 0 end),
-    (case when b.airport and m.airport_pass <> 'YES' then 1 else 0 end),
-    (select count(*) from roster o where o.service_date = b.service_date and o.csr_code = m.csr_code),
-    m.name
-  limit 1;
+  v_new := pick_next_csr(b, v_rejected);
 
   if v_new is null then
     update roster set csr_code = null, status = 'Unassigned', rejected_by = v_rejected where id = p_id;
@@ -291,6 +404,9 @@ grant execute on function publish_roster(text, date, jsonb, jsonb) to anon, auth
 grant execute on function list_csrs() to anon, authenticated;
 grant execute on function my_roster(text, text, date) to anon, authenticated;
 grant execute on function respond_booking(text, text, bigint, text) to anon, authenticated;
+grant execute on function my_availability(text, text) to anon, authenticated;
+grant execute on function set_my_availability(text, text, date, text) to anon, authenticated;
+grant execute on function list_csr_leave(date) to anon, authenticated;
 
 -- ---------- Operator side: unassigned bookings ----------
 

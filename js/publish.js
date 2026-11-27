@@ -102,6 +102,65 @@ async function respond(b, action) {
   }
 }
 
+// Availability for today and the next 2 days (India time). Locked dates cannot be changed.
+const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+function availMsg(text, isError = false) {
+  const m = $("#availMessage");
+  m.textContent = text;
+  m.className = text ? "message" + (isError ? " error" : "") : "message hidden";
+  if (text) toast(text, isError);
+}
+
+function availRow(d) {
+  const iso = String(d.day_date).slice(0, 10);
+  const row = document.createElement("div");
+  row.className = "avail-row";
+
+  const label = document.createElement("div");
+  label.className = "avail-date";
+  label.textContent = DAY_FORMAT.format(new Date(iso + "T00:00:00Z"));
+
+  const sel = document.createElement("select");
+  sel.setAttribute("aria-label", `Status for ${iso}`);
+  for (const s of ["Available", "On leave"]) sel.appendChild(new Option(s, s, false, s === d.day_status));
+  sel.disabled = d.is_locked === true;
+  sel.onchange = () => setAvailability(iso, sel.value);
+
+  const note = document.createElement("span");
+  note.className = "avail-note";
+  note.textContent = d.is_locked ? "Locked: you have accepted a booking on this date" : "";
+
+  row.append(label, sel, note);
+  return row;
+}
+
+async function loadAvailability() {
+  const rows = await rpc("my_availability", { p_csr: current.csr, p_pin: current.pin });
+  const box = $("#availRows");
+  box.innerHTML = "";
+  for (const d of rows) box.appendChild(availRow(d));
+  $("#availSection").classList.remove("hidden");
+}
+
+async function setAvailability(date, status) {
+  if (status === "On leave" && !confirm(`Mark yourself On leave on ${date}? Your bookings that day will be passed to other CSRs.`)) {
+    await loadAvailability();
+    return;
+  }
+  try {
+    const moved = await rpc("set_my_availability", { p_csr: current.csr, p_pin: current.pin, p_date: date, p_status: status });
+    let text = `${date} set to ${status}.`;
+    if (status === "On leave" && moved) text += ` ${moved} booking(s) passed on or marked Unassigned.`;
+    availMsg(text);
+    await loadAvailability();
+    if (current.date === date) await loadBookings();
+  } catch (e) {
+    availMsg(e.message, true);
+    await loadAvailability().catch(() => {});
+  }
+}
+
 async function init() {
   const sel = $("#pickName");
   try {
@@ -112,7 +171,12 @@ async function init() {
   } catch (e) {
     pageMsg(`Could not load names: ${e.message}`, true);
   }
-  $("#pickDate").value = new Date().toISOString().slice(0, 10);
+  $("#pickDate").value = istDate();
+}
+
+// Today's date in India, whatever the device's time zone.
+function istDate() {
+  return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 }
 
 $("#showBtn").addEventListener("click", async () => {
@@ -126,10 +190,56 @@ $("#showBtn").addEventListener("click", async () => {
   current = { csr, pin, date };
   try {
     await loadBookings();
+    await loadAvailability();
   } catch (e) {
     $("#bookings").innerHTML = "";
+    $("#availSection").classList.add("hidden");
     pageMsg(e.message, true);
   }
 });
 
+// Floating share button. Uses the device's share sheet when there is one; otherwise a menu with WhatsApp, email or copy.
+const PAGE_URL = location.href.split("#")[0];
+const SHARE_TITLE = "LPTI CSR bookings";
+const SHARE_TEXT = "View your LPTI bookings and set your availability:";
+function initShare() {
+  const btn = $("#shareBtn");
+  const menu = $("#shareMenu");
+  const message = encodeURIComponent(`${SHARE_TEXT}\n${PAGE_URL}`);
+  $("#shareWa").href = `https://wa.me/?text=${message}`;
+  $("#shareMail").href = `mailto:?subject=${encodeURIComponent(SHARE_TITLE)}&body=${message}`;
+
+  const setOpen = (open) => {
+    menu.classList.toggle("hidden", !open);
+    btn.setAttribute("aria-expanded", String(open));
+  };
+
+  btn.addEventListener("click", async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: PAGE_URL });
+      } catch (e) {
+        if (e.name !== "AbortError") toast("Sharing did not work. Use the menu instead.", true);
+      }
+      return;
+    }
+    setOpen(menu.classList.contains("hidden"));
+  });
+
+  for (const id of ["#shareWa", "#shareMail"]) $(id).addEventListener("click", () => setOpen(false));
+  $("#shareCopy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(PAGE_URL);
+      toast("Link copied.");
+    } catch {
+      toast("Could not copy. Copy the address from the browser bar.", true);
+    }
+    setOpen(false);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".share-fab")) setOpen(false);
+  });
+}
+
 init();
+initShare();

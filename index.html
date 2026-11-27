@@ -13,20 +13,33 @@
   </header>
 
   <main class="container">
-    <section class="card upload-card">
-      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Upload movement chart PDF">
-        <div class="upload-icon">PDF</div>
-        <h2>Upload daily movement chart</h2>
-        <p>Drop a PDF here or select a file. The document is processed in this browser.</p>
-        <button id="chooseBtn" class="btn primary">Choose PDF</button>
-        <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
-      </div>
-      <div id="progressWrap" class="progress-wrap hidden">
-        <div class="progress"><div id="progressBar"></div></div>
-        <span id="progressText">Preparing…</span>
-      </div>
-      <div id="message" class="message hidden" role="status"></div>
-    </section>
+    <div class="intake-row">
+      <section class="card upload-card">
+        <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Upload movement chart PDF">
+          <div class="upload-icon">PDF</div>
+          <div>
+            <h2>Upload daily movement chart</h2>
+            <p>Drop a PDF here or select a file. Processed in this browser.</p>
+          </div>
+          <button id="chooseBtn" class="btn primary">Choose PDF</button>
+          <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden>
+        </div>
+        <div id="progressWrap" class="progress-wrap hidden">
+          <div class="progress"><div id="progressBar"></div></div>
+          <span id="progressText">Preparing…</span>
+        </div>
+        <div id="message" class="message hidden" role="status"></div>
+      </section>
+
+      <section class="card load-card">
+        <h2>Load published chart</h2>
+        <p>Pick a travel date to open the chart saved for it.</p>
+        <div class="load-row">
+          <input id="loadDate" type="date" aria-label="Travel date">
+          <button id="loadChartBtn" class="btn" type="button">Load chart</button>
+        </div>
+      </section>
+    </div>
 
     <section id="workspace" class="hidden">
       <div class="summary-grid">

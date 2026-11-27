@@ -33,9 +33,23 @@
       </div>
       <div id="pageMessage" class="message hidden" role="status"></div>
     </section>
+    <section id="availSection" class="card csr-card hidden">
+      <h2>My availability</h2>
+      <p>Mark Available or On leave for today and the next 2 days. Once you accept a booking on a date, that date is locked.</p>
+      <div id="availRows" class="avail-grid"></div>
+      <div id="availMessage" class="message hidden" role="status"></div>
+    </section>
     <div id="bookings"></div>
   </main>
   <footer>Bookings are loaded from the LPTI roster. Only your own bookings are shown.</footer>
+  <div class="share-fab">
+    <div id="shareMenu" class="share-menu hidden" role="menu">
+      <a role="menuitem" id="shareWa" target="_blank" rel="noopener">WhatsApp</a>
+      <a role="menuitem" id="shareMail">Email</a>
+      <button role="menuitem" id="shareCopy" type="button">Copy link</button>
+    </div>
+    <button id="shareBtn" class="share-btn" type="button" aria-haspopup="true" aria-expanded="false">Share this page</button>
+  </div>
   <script type="module" src="js/publish.js"></script>
 </body>
 </html>
