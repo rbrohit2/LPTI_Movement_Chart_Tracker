@@ -21,15 +21,26 @@ $("#pdfInput").onchange=e=>e.target.files[0]&&loadPdf(e.target.files[0]);
 ["dragleave","drop"].forEach(n=>$("#dropZone").addEventListener(n,e=>{e.preventDefault();$("#dropZone").classList.remove("drag")}));
 $("#dropZone").addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadPdf(f)});
 $("#addRowBtn").onclick=()=>{state.rows.push(blankRow(state.rows.length+1));render()};
-$("#allocateBtn").onclick=()=>{
+$("#allocateBtn").onclick=async()=>{
   if(!state.rows.length){notify("Import a chart before allocating CSRs.",true);return}
   const csrs=loadCsrs(localStorage),markets=loadMarkets(localStorage);
-  const out=allocateAll(state.rows,csrs,markets);
+  const leave=await csrsOnLeave(state.serviceDate);
+  const usable=leave?csrs.filter(c=>!leave.has(c.csrCode)):csrs;
+  const out=allocateAll(state.rows,usable,markets);
   for(const a of out){const r=state.rows.find(x=>x.movementNo===a.movementNo);if(!r)continue;
-    const c=csrs.find(x=>x.id===a.csrId);r.csr=c?(a.status==="Next best"?`${c.csrCode} (next best)`:c.csrCode):a.status;r.csrReason=a.reason;r.userEdited=false}
+    const c=usable.find(x=>x.id===a.csrId);r.csr=c?(a.status==="Next best"?`${c.csrCode} (next best)`:c.csrCode):a.status;r.csrReason=a.reason;r.userEdited=false}
   const n=out.filter(a=>a.csrId).length;
-  notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.`,n<out.length);render();
+  const leaveNote=!leave?" CSR leave could not be checked, so On leave CSRs may be included.":leave.size?` Left out (On leave): ${[...leave].join(", ")}.`:"";
+  notify(`${n} of ${out.length} movement(s) allocated. Review any "Next best" or "Unassigned" rows.${leaveNote}`,n<out.length||!leave);render();
 };
+// CSR codes that are On leave for a date, as set by each CSR on publish.html. Null if Supabase could not be reached.
+async function csrsOnLeave(date){
+  if(!date)return new Set();
+  try{
+    const rows=await rpc("list_csr_leave",{p_date:date});
+    return new Set(rows.map(x=>typeof x==="string"?x:Object.values(x)[0]));
+  }catch{return null}
+}
 $("#publishBtn").onclick=publishRoster;
 initUnassigned(document,()=>state.serviceDate);
 async function publishRoster(){
@@ -42,7 +53,12 @@ async function publishRoster(){
   if(!passcode)return;
   const badCsr=state.rows.find(r=>r.csrManual&&String(r.csr||"").trim()&&!csrs.some(c=>c.csrCode===String(r.csr).trim().toUpperCase()));
   if(badCsr){notify(`"${badCsr.csr}" on S.No ${badCsr.movementNo} is not a CSR code. Use a code from the CSR table.`,true);return}
-  const assignments=allocateAll(state.rows,csrs,markets);
+  const leave=await csrsOnLeave(state.serviceDate);
+  if(!leave){notify("Could not check CSR leave for this date. Publish stopped; try again.",true);return}
+  const onLeaveManual=state.rows.find(r=>r.csrManual&&leave.has(String(r.csr||"").trim().toUpperCase()));
+  if(onLeaveManual){notify(`${String(onLeaveManual.csr).trim().toUpperCase()} is On leave on ${state.serviceDate} (S.No ${onLeaveManual.movementNo}). Choose another CSR.`,true);return}
+  const usable=csrs.filter(c=>!leave.has(c.csrCode));
+  const assignments=allocateAll(state.rows,usable,markets);
   const pins=ensurePins(localStorage,csrs);
   const payload=buildRoster(state.rows,assignments,csrs,markets,pins,state.serviceDate);
   if(!payload.rows.length){notify("No movements need a CSR, nothing to publish.",true);return}
@@ -50,7 +66,8 @@ async function publishRoster(){
   try{
     const count=await rpc("publish_roster",{p_pass:passcode,p_date:state.serviceDate,p_csrs:payload.csrs,p_rows:payload.rows});
     const pinText=csrs.map(c=>`${c.name} ${pins[c.csrCode]}`).join(" · ");
-    notify(`Published ${count} booking(s) for ${state.serviceDate}. Share publish.html with CSRs. PINs: ${pinText}`);
+    const leaveText=leave.size?` Left out (On leave): ${[...leave].join(", ")}.`:"";
+    notify(`Published ${count} booking(s) for ${state.serviceDate}.${leaveText} Share publish.html with CSRs. PINs: ${pinText}`);
     await refreshResponses(passcode);
   }catch(e){notify(`Publish failed: ${e.message}`,true)}
 }

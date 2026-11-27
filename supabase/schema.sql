@@ -131,7 +131,7 @@ $$;
 -- the new allocation; movements no longer on the chart are removed.
 create or replace function publish_roster(p_pass text, p_date date, p_csrs jsonb, p_rows jsonb)
 returns int language plpgsql security definer set search_path = public as $$
-declare c jsonb; r jsonb; n int := 0; s text; v_key text; v_manual boolean;
+declare c jsonb; r jsonb; n int := 0; s text; v_key text; v_manual boolean; lv text;
 begin
   if not is_operator(p_pass) then raise exception 'Operator passcode is wrong'; end if;
 
@@ -204,6 +204,11 @@ begin
                           and roster.pickup = excluded.pickup and roster.dropoff = excluded.dropoff
                     then roster.rejected_by else '{}'::text[] end;
     n := n + 1;
+  end loop;
+
+  -- A CSR on leave for this date never keeps a booking from the chart, whatever the chart says.
+  for lv in select s.csr_code from csr_day_status s where s.service_date = p_date and s.status = 'On leave' loop
+    perform reallocate_leave_bookings(lv, p_date);
   end loop;
 
   return n;
@@ -302,12 +307,39 @@ begin
 end;
 $$;
 
+-- Moves every booking a CSR holds on a date to the next free CSR (Unassigned if none). Used when a CSR goes on leave.
+-- Accepted bookings never reach here, because a date with an accepted booking is locked. Returns the number moved.
+create or replace function reallocate_leave_bookings(p_csr text, p_date date)
+returns int language plpgsql security definer set search_path = public as $$
+declare b roster; v_new text; n int := 0;
+begin
+  for b in
+    select * from roster r where r.service_date = p_date and r.csr_code = p_csr order by r.id for update
+  loop
+    v_new := pick_next_csr(b, b.rejected_by);
+    if v_new is null then
+      update roster set csr_code = null, status = 'Unassigned' where id = b.id;
+    else
+      update roster set csr_code = v_new, status = 'Reallocated' where id = b.id;
+    end if;
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+
+-- CSR codes that are On leave for a date. Public: the names are already public, and no bookings are shown.
+create or replace function list_csr_leave(p_date date)
+returns setof text language sql stable security definer set search_path = public as $$
+  select s.csr_code from csr_day_status s where s.service_date = p_date and s.status = 'On leave';
+$$;
+
 -- Set Available or On leave for one date in the window. Refused once the date is locked.
 -- Setting On leave moves the CSR's bookings for that date to the next free CSR (Unassigned if none).
 -- Returns how many bookings were moved or left unassigned.
 create or replace function set_my_availability(p_csr text, p_pin text, p_date date, p_status text)
 returns int language plpgsql security definer set search_path = public as $$
-declare b roster; v_new text; n int := 0;
+declare n int := 0;
 begin
   perform check_csr(p_csr, p_pin);
   if p_status not in ('Available', 'On leave') then raise exception 'Status must be Available or On leave'; end if;
@@ -322,17 +354,7 @@ begin
   on conflict (csr_code, service_date) do update set status = excluded.status;
 
   if p_status = 'On leave' then
-    for b in
-      select * from roster r where r.service_date = p_date and r.csr_code = p_csr order by r.id for update
-    loop
-      v_new := pick_next_csr(b, b.rejected_by);
-      if v_new is null then
-        update roster set csr_code = null, status = 'Unassigned' where id = b.id;
-      else
-        update roster set csr_code = v_new, status = 'Reallocated' where id = b.id;
-      end if;
-      n := n + 1;
-    end loop;
+    n := reallocate_leave_bookings(p_csr, p_date);
   end if;
 
   return n;
@@ -384,6 +406,7 @@ grant execute on function my_roster(text, text, date) to anon, authenticated;
 grant execute on function respond_booking(text, text, bigint, text) to anon, authenticated;
 grant execute on function my_availability(text, text) to anon, authenticated;
 grant execute on function set_my_availability(text, text, date, text) to anon, authenticated;
+grant execute on function list_csr_leave(date) to anon, authenticated;
 
 -- ---------- Operator side: unassigned bookings ----------
 
