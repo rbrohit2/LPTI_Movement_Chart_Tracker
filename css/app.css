@@ -30,10 +30,42 @@
 #movementTable td textarea{height:28px;resize:none}
 #movementTable .filter-row input{font-size:12px}
 
+/* Export PDF sizing. Applies while body.print-chart is set, so the fit can be measured before printing.
+   Compact type, no minimum widths on cells, and words are not split. */
+body.print-chart #movementTable{min-width:0!important}
+body.print-chart #movementTable,body.print-chart #movementTable th,body.print-chart #movementTable td{font-size:9.5px!important}
+body.print-chart #movementTable td input,body.print-chart #movementTable td select,body.print-chart #movementTable td textarea{min-width:0!important;width:100%!important;max-width:100%;overflow:visible;text-overflow:clip}
+body.print-chart #movementTable td:nth-child(3) input,body.print-chart #movementTable td:nth-child(10) input,body.print-chart #movementTable td:nth-child(11) input{min-width:0!important}
+body.print-chart #movementTable td{padding:2px 3px!important;overflow-wrap:break-word!important}
+/* Fixed column shares (sum 100%) so the chart always fits the A4 landscape width. Text wraps inside each column. */
+body.print-chart #movementTable{table-layout:fixed!important;width:100%!important}
+body.print-chart #movementTable th.sortable,body.print-chart .csr-response{white-space:normal!important}
+body.print-chart .csr-response{padding:1px 3px!important;font-size:8.5px!important;line-height:1.2}
+body.print-chart #movementTable th:nth-child(1){width:3%}
+body.print-chart #movementTable th:nth-child(2){width:7%}
+body.print-chart #movementTable th:nth-child(3){width:6%}
+body.print-chart #movementTable th:nth-child(4){width:3%}
+body.print-chart #movementTable th:nth-child(5){width:5%}
+body.print-chart #movementTable th:nth-child(6){width:3%}
+body.print-chart #movementTable th:nth-child(7){width:6%}
+body.print-chart #movementTable th:nth-child(8){width:5%}
+body.print-chart #movementTable th:nth-child(9){width:5%}
+body.print-chart #movementTable th:nth-child(10){width:7%}
+body.print-chart #movementTable th:nth-child(11){width:5%}
+body.print-chart #movementTable th:nth-child(12){width:5%}
+body.print-chart #movementTable th:nth-child(13){width:7%}
+body.print-chart #movementTable th:nth-child(14){width:5%}
+body.print-chart #movementTable th:nth-child(15){width:5%}
+body.print-chart #movementTable th:nth-child(16){width:5%}
+body.print-chart #movementTable th:nth-child(17){width:5%}
+body.print-chart #movementTable th:nth-child(18){width:4%}
+body.print-chart #movementTable th:nth-child(19){width:3%}
+body.print-chart #movementTable th:nth-child(20){width:6%}
+
 /* Print / PDF: landscape, no toolbar, filters or action column */
 .print-only{display:none}
 @media print{
-  @page{size:A3 landscape;margin:8mm}
+  @page{size:A4 landscape;margin:5mm}
   body *{visibility:hidden}
   #printArea,#printArea *,.print-only,.print-only *{visibility:visible}
   #printArea{position:absolute;left:0;top:0;width:100%;box-shadow:none;border:0;background:#fff}
@@ -43,8 +75,7 @@
   #movementTable{font-size:11px}
   #movementTable td input,#movementTable td select,#movementTable td textarea{border:0;background:transparent;font-size:11px;padding:1px 2px;min-height:0;appearance:none}
   #movementTable tr{break-inside:avoid}
-  #movementTable{min-width:0!important;width:100%!important}
-  #movementTable td select{width:auto!important;min-width:max-content;max-width:none;overflow:visible;text-overflow:clip}
+  #movementTable{width:100%!important}
   #movementTable input::-webkit-calendar-picker-indicator{display:none!important}
   #printArea{margin:0!important}
   .print-only{padding-left:4px}
