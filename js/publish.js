@@ -198,48 +198,5 @@ $("#showBtn").addEventListener("click", async () => {
   }
 });
 
-// Floating share button. Uses the device's share sheet when there is one; otherwise a menu with WhatsApp, email or copy.
-const PAGE_URL = location.href.split("#")[0];
-const SHARE_TITLE = "LPTI CSR bookings";
-const SHARE_TEXT = "View your LPTI bookings and set your availability:";
-function initShare() {
-  const btn = $("#shareBtn");
-  const menu = $("#shareMenu");
-  const message = encodeURIComponent(`${SHARE_TEXT}\n${PAGE_URL}`);
-  $("#shareWa").href = `https://wa.me/?text=${message}`;
-  $("#shareMail").href = `mailto:?subject=${encodeURIComponent(SHARE_TITLE)}&body=${message}`;
-
-  const setOpen = (open) => {
-    menu.classList.toggle("hidden", !open);
-    btn.setAttribute("aria-expanded", String(open));
-  };
-
-  btn.addEventListener("click", async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: PAGE_URL });
-      } catch (e) {
-        if (e.name !== "AbortError") toast("Sharing did not work. Use the menu instead.", true);
-      }
-      return;
-    }
-    setOpen(menu.classList.contains("hidden"));
-  });
-
-  for (const id of ["#shareWa", "#shareMail"]) $(id).addEventListener("click", () => setOpen(false));
-  $("#shareCopy").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(PAGE_URL);
-      toast("Link copied.");
-    } catch {
-      toast("Could not copy. Copy the address from the browser bar.", true);
-    }
-    setOpen(false);
-  });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".share-fab")) setOpen(false);
-  });
-}
-
 init();
-initShare();
+
