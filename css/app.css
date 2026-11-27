@@ -43,6 +43,17 @@
   #movementTable{font-size:11px}
   #movementTable td input,#movementTable td select,#movementTable td textarea{border:0;background:transparent;font-size:11px;padding:1px 2px;min-height:0;appearance:none}
   #movementTable tr{break-inside:avoid}
+  #movementTable{min-width:0!important;width:100%!important}
+  #movementTable td select{width:auto!important;min-width:max-content;max-width:none;overflow:visible;text-overflow:clip}
+  #movementTable input::-webkit-calendar-picker-indicator{display:none!important}
+  #printArea{margin:0!important}
+  .print-only{padding-left:4px}
+  /* Export PDF (body.print-chart): only the movement chart prints. Other sections take no space on the page. */
+  body.print-chart .topbar,body.print-chart .intake-row,body.print-chart .progress-wrap,body.print-chart .summary-grid,
+  body.print-chart .toolbar-card,body.print-chart #unassignedSection,body.print-chart .debug-card,
+  body.print-chart #csrSection,body.print-chart #marketSection,body.print-chart footer,
+  body.print-chart #toastStack,body.print-chart .share-fab{display:none!important}
+  body.print-chart .container,body.print-chart main,body.print-chart #workspace{margin:0!important;padding:0!important;max-width:none!important}
   -webkit-print-color-adjust:exact;print-color-adjust:exact
 }
 

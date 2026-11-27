@@ -97,6 +97,9 @@ $("#exportBtn").onclick=exportCsv;
 $("#exportPdfBtn").onclick=()=>{
   if(!state.rows.length){notify("Import a chart before exporting.",true);return}
   $("#printTitle").textContent=`LPTI Movement Chart · ${state.serviceDate||""} · ${visibleRows().length} movement(s)`;
+  // Only the movement chart prints: print CSS hides every other section while this class is on.
+  document.body.classList.add("print-chart");
+  window.addEventListener("afterprint",()=>document.body.classList.remove("print-chart"),{once:true});
   window.print();
 };
 $("#resetBtn").onclick=resetAll;
