@@ -259,6 +259,34 @@ function saveLocal(){localStorage.setItem("lptiMovementMvp",JSON.stringify({save
 function exportCsv(){const q=v=>'"'+String(v??"").replaceAll('"','""')+'"';const csv=[fields.map(f=>q(headers[f])).join(","),...state.rows.map(r=>fields.map(f=>q(r[f])).join(","))].join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv"}));a.download=`movement-chart-${state.serviceDate||"export"}.csv`;a.click();URL.revokeObjectURL(a.href)}
 function resetAll(){if(!confirm("Clear the current imported chart and unsaved edits?"))return;state.rows=[];state.rawText="";$("#workspace").classList.add("hidden");$("#message").classList.add("hidden");$("#pdfInput").value=""}
 
+// Floating share button: shares the CSR page (publish.html) on the live site.
+// Uses the device's share sheet when there is one; otherwise a menu with WhatsApp, email or copy.
+const CSR_PAGE_URL="https://rbrohit2.github.io/LPTI_Movement_Chart_Tracker/publish.html";
+const SHARE_TITLE="LPTI CSR bookings";
+const SHARE_TEXT="Select your name, enter your PIN to see your bookings and set your availability:";
+function initShare(){
+  const btn=$("#shareBtn"),menu=$("#shareMenu");
+  const message=encodeURIComponent(`${SHARE_TEXT}\n${CSR_PAGE_URL}`);
+  $("#shareWa").href=`https://wa.me/?text=${message}`;
+  $("#shareMail").href=`mailto:?subject=${encodeURIComponent(SHARE_TITLE)}&body=${message}`;
+  const setOpen=open=>{menu.classList.toggle("hidden",!open);btn.setAttribute("aria-expanded",String(open))};
+  btn.addEventListener("click",async()=>{
+    if(navigator.share){
+      try{await navigator.share({title:SHARE_TITLE,text:SHARE_TEXT,url:CSR_PAGE_URL})}
+      catch(e){if(e.name!=="AbortError")toast("Sharing did not work. Use the menu instead.",true)}
+      return;
+    }
+    setOpen(menu.classList.contains("hidden"));
+  });
+  for(const id of ["#shareWa","#shareMail"])$(id).addEventListener("click",()=>setOpen(false));
+  $("#shareCopy").addEventListener("click",async()=>{
+    try{await navigator.clipboard.writeText(CSR_PAGE_URL);toast("Link copied.")}
+    catch{toast("Could not copy. Copy the address from the browser bar.",true)}
+    setOpen(false);
+  });
+  document.addEventListener("click",e=>{if(!e.target.closest(".share-fab"))setOpen(false)});
+}
+initShare();
 initCsrSection(document,localStorage);
 initMarketSection(document,localStorage);
 $("#loadDate").value=new Date(Date.now()+5.5*3600e3).toISOString().slice(0,10); // India date, whatever the device's time zone
