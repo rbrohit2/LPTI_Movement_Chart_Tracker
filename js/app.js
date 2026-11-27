@@ -109,7 +109,7 @@ async function loadPublishedChart(){
   const date=$("#loadDate").value;
   if(!date){notify("Pick a travel date first.",true);return}
   if(state.rows.length&&!confirm("Replace the chart on screen with the published chart for this date? Unsaved edits will be lost."))return;
-  const passcode=prompt("Operator passcode:");
+  const passcode=rememberedPasscode();
   if(!passcode)return;
   try{
     const rows=await rpc("list_roster",{p_pass:passcode,p_date:date});
@@ -122,7 +122,18 @@ async function loadPublishedChart(){
     $("#fileMeta").textContent=`Published chart for ${date} · ${rows.length} movement(s) · loaded from Supabase.`;
     notify(`Loaded ${rows.length} movement(s) for ${date}.`);
     render();
-  }catch(e){notify(`Could not load chart: ${e.message}`,true)}
+  }catch(e){
+    // A wrong passcode is forgotten, so the next attempt asks again.
+    if(/passcode is wrong/i.test(e.message))sessionStorage.removeItem(PASSCODE_KEY);
+    notify(`Could not load chart: ${e.message}`,true);
+  }
+}
+// The operator passcode is kept for this browser tab only (sessionStorage), so it is asked once per tab.
+const PASSCODE_KEY="lptiOperatorPasscode";
+function rememberedPasscode(){
+  let p=sessionStorage.getItem(PASSCODE_KEY);
+  if(!p){p=prompt("Operator passcode:");if(p)sessionStorage.setItem(PASSCODE_KEY,p)}
+  return p;
 }
 // Maps a row saved in Supabase back to a row of the editable chart table.
 function rowFromRoster(d){
