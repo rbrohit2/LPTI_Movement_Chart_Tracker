@@ -83,6 +83,33 @@ $("#exportPdfBtn").onclick=()=>{
   window.print();
 };
 $("#resetBtn").onclick=resetAll;
+$("#loadChartBtn").onclick=loadPublishedChart;
+// Opens the chart published for a travel date, from Supabase, so it can be edited, republished or reviewed.
+async function loadPublishedChart(){
+  const date=$("#loadDate").value;
+  if(!date){notify("Pick a travel date first.",true);return}
+  if(state.rows.length&&!confirm("Replace the chart on screen with the published chart for this date? Unsaved edits will be lost."))return;
+  const passcode=prompt("Operator passcode:");
+  if(!passcode)return;
+  try{
+    const rows=await rpc("list_roster",{p_pass:passcode,p_date:date});
+    if(!rows.length){notify(`No published chart for ${date}.`,true);return}
+    state.rows=rows.map(rowFromRoster);
+    state.serviceDate=date;state.fileName="";state.rawText="";
+    $("#rawText").value="";
+    $("#workspace").classList.remove("hidden");
+    $("#chartTitle").textContent=`Movement review · ${date}`;
+    $("#fileMeta").textContent=`Published chart for ${date} · ${rows.length} movement(s) · loaded from Supabase.`;
+    notify(`Loaded ${rows.length} movement(s) for ${date}.`);
+    render();
+  }catch(e){notify(`Could not load chart: ${e.message}`,true)}
+}
+// Maps a row saved in Supabase back to a row of the editable chart table.
+function rowFromRoster(d){
+  const r={movementNo:Number(d.movement_no),serviceDate:d.service_date,guestGroupName:d.guest_group||"",fh:d.fh||"",fileCode:d.file_code||"",pax:d.pax||"",movementType:d.movement_type||"",mode:d.mode||"",serviceNumber:d.flight||"",scheduledTime:d.scheduled_time||"",pickup:d.pickup||"",dropoff:d.dropoff||"",reportingTime:d.reporting_time||"",vehicle:d.vehicle||"",transporter:"",reportAt:d.report_at||"",assistanceRequired:"REVIEW",remarks:"",csr:d.csr_code||"",csrResponse:d.status,csrManual:false,userEdited:false};
+  r.needsReview=validate(r).length>0;
+  return r;
+}
 
 function notify(text,error=false){const m=$("#message");m.textContent=text;m.className="message"+(error?" error":"");toast(text,error)}
 function progress(p,text){$("#progressWrap").classList.remove("hidden");$("#progressBar").style.width=p+"%";$("#progressText").textContent=text}
@@ -214,4 +241,5 @@ function resetAll(){if(!confirm("Clear the current imported chart and unsaved ed
 
 initCsrSection(document,localStorage);
 initMarketSection(document,localStorage);
+$("#loadDate").value=new Date(Date.now()+5.5*3600e3).toISOString().slice(0,10); // India date, whatever the device's time zone
 const saved=localStorage.getItem("lptiMovementMvp");if(saved){try{const x=JSON.parse(saved);Object.assign(state,x);if(state.rows?.length){$("#workspace").classList.remove("hidden");$("#rawText").value=state.rawText||"";notify(`Restored ${state.rows.length} locally saved movement row(s).`);render()}}catch{}}
