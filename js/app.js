@@ -99,9 +99,35 @@ $("#exportPdfBtn").onclick=()=>{
   $("#printTitle").textContent=`LPTI Movement Chart · ${state.serviceDate||""} · ${visibleRows().length} movement(s)`;
   // Only the movement chart prints: print CSS hides every other section while this class is on.
   document.body.classList.add("print-chart");
-  window.addEventListener("afterprint",()=>document.body.classList.remove("print-chart"),{once:true});
+  const restore=shortenForPrint();
+  window.addEventListener("afterprint",()=>{document.body.classList.remove("print-chart");restore()},{once:true});
   window.print();
 };
+// PDF only: Type shows ARR / DEP (TRF, OTH for the others), Date shows 27/Nov. The on-screen table keeps full values.
+const PRINT_TYPE={ARRIVAL:"ARR",DEPARTURE:"DEP",TRANSFER:"TRF",OTHER:"OTH"};
+function printDate(iso){
+  if(!iso)return"";
+  const d=new Date(iso+"T00:00:00Z");
+  return String(d.getUTCDate()).padStart(2,"0")+"/"+d.toLocaleString("en-GB",{month:"short",timeZone:"UTC"});
+}
+// Swaps the Date and Type controls for short text. Returns a function that puts the controls back.
+function shortenForPrint(){
+  const undo=[];
+  for(const tr of $("#movementTable tbody").rows){
+    const swaps=[[1,td=>printDate(td.querySelector("input")?.value)],[6,td=>{const v=td.querySelector("select")?.value||"";return PRINT_TYPE[v]??v}]];
+    for(const [idx,text] of swaps){
+      const td=tr.cells[idx];
+      if(!td||!td.querySelector("input,select"))continue;
+      const nodes=[...td.childNodes];
+      const span=document.createElement("span");
+      span.className="print-short";
+      span.textContent=text(td);
+      td.replaceChildren(span);
+      undo.push(()=>td.replaceChildren(...nodes));
+    }
+  }
+  return()=>undo.forEach(f=>f());
+}
 $("#resetBtn").onclick=resetAll;
 $("#loadChartBtn").onclick=loadPublishedChart;
 // Opens the chart published for a travel date, from Supabase, so it can be edited, republished or reviewed.
